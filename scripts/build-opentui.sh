@@ -8,7 +8,9 @@ set -euo pipefail
 source "$(dirname "$0")/env.sh"
 
 OPENTUI_TAG="${OPENTUI_TAG:-v0.4.5}"          # tag matching @opentui/core 0.4.5 (npm)
-ZIG_VERSION="${ZIG_VERSION:-0.15.1}"          # override if opentui requires another
+ZIG_VERSION="${ZIG_VERSION:-0.15.2}"          # opentui pins 0.15.2 (checkZigVersion)
+
+mkdir -p "$OUT/logs" "$OPENTUI_OUT"
 
 # --- 1. clone (pinned to the tag the npm package was built from) ---
 if [ ! -d "$OPENTUI_REPO/.git" ]; then
@@ -20,7 +22,6 @@ if [ ! -d "$OPENTUI_REPO/.git" ]; then
         exit 1
     fi
 fi
-mkdir -p "$OPENTUI_OUT"
 
 # --- 2. zig toolchain (host glibc; targets musl) ---
 ZIG_BIN="$OUT/zig-$ZIG_VERSION/zig"
@@ -40,40 +41,27 @@ log "compiling dl-symtab.o (x86_64-linux-musl)"
 "$ZIG_BIN" cc -target x86_64-linux-musl -O2 -c "$ROOT/src/dl-symtab.c" \
     -o "$OPENTUI_OUT/dl-symtab.o"
 
-# --- 4. static libopentui.a ---
-cd "$OPENTUI_REPO"
-log "opentui build files:"; ls build.zig build.zig.zon 2>/dev/null
-log "shared/static options:"
-"$ZIG_BIN" build --help 2>/dev/null | grep -iE "shared|static|target|release|optimize" || true
+# --- 4. static libopentui.a (in the bun-build container: zig package deps
+#        uucode/yoga need network; the host has none, the container does) ---
+# The clone's build.zig hardcodes .linkage = .dynamic; our patch threads a
+# -Dstatic-lib option through build() → buildSingleTarget() → buildTarget().
+# linux-musl links only dl/pthread (inside libc) + in-tree yoga C++.
+apply_patch "$OPENTUI_REPO" "$ROOT/patches/opentui-static-lib.patch"
 
-build_static() {
-    # probe: which option name does this build.zig use for non-shared output?
-    for opt in "-Dshared=false" "-Dbuild-mode=static" "-Dstatic=true" "-Dlink-libc=true"; do
-        if "$ZIG_BIN" build --help 2>/dev/null | grep -qF "${opt%%=*}"; then
-            log "trying: zig build $opt"
-            "$ZIG_BIN" build "$opt" -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl 2>"$OUT/logs/opentui-build.log" \
-                && return 0 || err "zig build $opt failed"
-        fi
-    done
-    return 1
-}
+ensure_running "$BUN_CONTAINER" "$BUN_IMAGE"
+docker exec "$BUN_CONTAINER" sh -c 'rm -rf /opt/zig /opt/opentui && mkdir -p /opt/zig /opt/opentui'
+docker cp "$(dirname "$ZIG_BIN")/." "$BUN_CONTAINER:/opt/zig/"
+docker cp "$OPENTUI_REPO/packages/core/src/zig/." "$BUN_CONTAINER:/opt/opentui/"
 
-if ! build_static; then
-    err "repo build did not produce a static lib; trying direct zig build-lib"
-    ENTRY="$(grep -rlE "export fn (setLogCallback|createEventSink)" --include="*.zig" . | head -1)"
-    [ -n "$ENTRY" ] || { err "could not locate the FFI entry zig file"; exit 1; }
-    log "direct build-lib on: $ENTRY"
-    "$ZIG_BIN" build-lib -target x86_64-linux-musl -O ReleaseFast -fno-compiler-rt \
-        -femit-bin="$OPENTUI_OUT/libopentui.a" "$ENTRY" 2>"$OUT/logs/opentui-build.log" \
-        || { err "direct build failed — see $OUT/logs/opentui-build.log"; exit 1; }
+mkdir -p "$OUT/logs"
+log "zig build (x86_64-linux-musl, static) in $BUN_CONTAINER"
+if ! docker exec "$BUN_CONTAINER" sh -c \
+    'cd /opt/opentui && PATH=/opt/zig:$PATH zig build -Dtarget=x86_64-linux-musl \
+       -Dstatic-lib=true -Doptimize=ReleaseFast build-x86_64-linux-musl' \
+    >"$OUT/logs/opentui-build.log" 2>&1; then
+    err "zig build failed — see $OUT/logs/opentui-build.log"; tail -30 "$OUT/logs/opentui-build.log"; exit 1
 fi
-
-# locate whatever static archive the repo build emitted
-if [ ! -f "$OPENTUI_OUT/libopentui.a" ]; then
-    A="$(find .zig-cache -name '*.a' ! -name '*compiler_rt*' 2>/dev/null | head -1)"
-    [ -n "$A" ] || { err "no .a produced"; exit 1; }
-    cp "$A" "$OPENTUI_OUT/libopentui.a"
-fi
+docker cp "$BUN_CONTAINER:/opt/opentui/lib/x86_64-linux-musl/libopentui.a" "$OPENTUI_OUT/libopentui.a"
 ls -la "$OPENTUI_OUT"
 
 # --- 5. verify the FFI exports bun will look up ---

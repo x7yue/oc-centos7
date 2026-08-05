@@ -1,0 +1,78 @@
+diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
+index 0c82ba3..2fd7fa5 100644
+--- a/packages/core/src/zig/build.zig
++++ b/packages/core/src/zig/build.zig
+@@ -275,6 +275,7 @@ pub fn build(b: *std.Build) void {
+     const debug_use_llvm = b.option(bool, "debug-llvm", "Use LLVM backend for debug/test artifacts");
+     const target_option = b.option([]const u8, "target", "Build for specific target (e.g., 'x86_64-linux-gnu.2.17').");
+     const build_all = b.option(bool, "all", "Build for all supported targets") orelse false;
++    const static_lib = b.option(bool, "static-lib", "Build a static archive instead of a shared library") orelse false;
+     const gpa_safe_stats = b.option(bool, "gpa-safe-stats", "Enable GPA safety checks for trustworthy allocator stats") orelse false;
+     const macos_sdk_path = resolveMacOSSDKPath(b);
+     const build_options = b.addOptions();
+@@ -282,7 +283,7 @@ pub fn build(b: *std.Build) void {
+ 
+     if (target_option) |target_str| {
+         // Build single target
+-        buildSingleTarget(b, target_str, optimize, build_options, macos_sdk_path) catch |err| {
++        buildSingleTarget(b, target_str, optimize, build_options, macos_sdk_path, static_lib) catch |err| {
+             std.debug.print("Error building target '{s}': {}\n", .{ target_str, err });
+             std.process.exit(1);
+         };
+@@ -397,6 +398,7 @@ fn buildAllTargets(
+             optimize,
+             build_options,
+             macos_sdk_path,
++            false,
+         );
+     }
+ }
+@@ -424,6 +426,7 @@ fn buildNativeTarget(
+                 optimize,
+                 build_options,
+                 macos_sdk_path,
++                false,
+             );
+             return;
+         }
+@@ -439,6 +442,7 @@ fn buildSingleTarget(
+     optimize: std.builtin.OptimizeMode,
+     build_options: *std.Build.Step.Options,
+     macos_sdk_path: ?[]const u8,
++    static_lib: bool,
+ ) !void {
+     // Check if it matches a known target, use its output_name
+     for (SUPPORTED_TARGETS) |supported_target| {
+@@ -451,13 +455,14 @@ fn buildSingleTarget(
+                 optimize,
+                 build_options,
+                 macos_sdk_path,
++                static_lib,
+             );
+             return;
+         }
+     }
+     // Custom target - use target string as output name
+     const description = try std.fmt.allocPrint(b.allocator, "Custom target: {s}", .{target_str});
+-    try buildTarget(b, target_str, target_str, description, optimize, build_options, macos_sdk_path);
++    try buildTarget(b, target_str, target_str, description, optimize, build_options, macos_sdk_path, static_lib);
+ }
+ 
+ fn buildTarget(
+@@ -468,6 +473,7 @@ fn buildTarget(
+     optimize: std.builtin.OptimizeMode,
+     build_options: *std.Build.Step.Options,
+     macos_sdk_path: ?[]const u8,
++    static_lib: bool,
+ ) !void {
+     const target_query = try std.Target.Query.parse(.{ .arch_os_abi = zig_target });
+     const target = b.resolveTargetQuery(target_query);
+@@ -488,7 +494,7 @@ fn buildTarget(
+     const lib = b.addLibrary(.{
+         .name = LIB_NAME,
+         .root_module = module,
+-        .linkage = .dynamic,
++        .linkage = if (static_lib) .static else .dynamic,
+     });
+ 
+     addNativeAudioDependencies(b, lib, target, macos_sdk_path);
