@@ -1,0 +1,17 @@
+diff --git a/packages/opencode/script/build.ts b/packages/opencode/script/build.ts
+index ce45f770f0..4f5279be62 100755
+--- a/packages/opencode/script/build.ts
++++ b/packages/opencode/script/build.ts
+@@ -132,7 +132,11 @@ const targets = singleFlag
+ 
+       return true
+     })
+-  : allTargets
++  : process.env.OPENCODE_ONLY_LINUX_X64_MUSL
++    ? allTargets.filter(
++        (item) => item.os === "linux" && item.arch === "x64" && item.abi === "musl" && item.avx2 === undefined,
++      )
++    : allTargets
+ 
+ await $`rm -rf dist`
+ 

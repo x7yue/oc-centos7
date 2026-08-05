@@ -1,0 +1,8 @@
+# Builds opencode standalone with our fully-static musl bun.
+# Host bun == target (musl) -> `bun build --compile` embeds our static runtime.
+FROM alpine:3.23
+
+RUN apk add --no-cache git curl ca-certificates unzip tar xz
+# static bun will be mounted at /usr/local/bin/bun at runtime
+
+WORKDIR /src/opencode

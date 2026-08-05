@@ -1,0 +1,9 @@
+# upstream repos (managed by scripts, not tracked here)
+/bun/
+/opencode/
+/opentui/
+
+# build artifacts
+/output/
+*.raw
+node_modules/

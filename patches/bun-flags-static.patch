@@ -1,0 +1,27 @@
+diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
+index b5cc852770..c71d23e4b4 100644
+--- a/scripts/build/flags.ts
++++ b/scripts/build/flags.ts
+@@ -1182,9 +1182,9 @@ export const linkerFlags: Flag[] = [
+     desc: "Static C++ runtime (don't depend on host libstdc++)",
+   },
+   {
+-    flag: ["-lstdc++", "-lgcc"],
++    flag: ["-static"],
+     when: c => c.linux && c.abi === "musl",
+-    desc: "Dynamic C++ runtime on musl (static unavailable)",
++    desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
+   },
+   {
+     flag: c => [
+@@ -1331,8 +1331,8 @@ export const linkerFlags: Flag[] = [
+       `-Wl,--dynamic-list=${c.cwd}/src/symbols.dyn`,
+       `-Wl,--version-script=${c.cwd}/src/linker.lds`,
+     ],
+-    when: c => c.linux,
+-    desc: "Dynamic symbol list + version script",
++    when: c => c.linux && c.abi !== "musl",
++    desc: "Dynamic symbol list + version script (musl is fully static: no dynsym, version script errors)",
+   },
+   // ─── FreeBSD ───
+   {

@@ -1,0 +1,55 @@
+# Build environment for Bun (Rust) cross-compiling to fully-static linux-musl.
+# Mirrors bun's CI image (ubuntu 24.04 + LLVM 21.1.8 + pinned nightly rust
+# + alpine musl sysroot), plus the static-link tweak.
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# --- base apt deps (from scripts/bootstrap.sh) ---
+RUN for i in 1 2 3 4 5; do apt-get update && break || sleep 8; done \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=10 \
+    bash ca-certificates curl wget git unzip xz-utils gnupg lsb-release \
+    software-properties-common build-essential python3 \
+    cmake ninja-build pkg-config libtool golang ruby-full ccache \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- LLVM 21 (apt.llvm.org) ---
+RUN wget -qO- https://apt.llvm.org/llvm.sh > /tmp/llvm.sh \
+    && bash /tmp/llvm.sh 21 all \
+    && rm /tmp/llvm.sh
+ENV PATH=/usr/lib/llvm-21/bin:$PATH
+
+# --- rustup: pinned nightly (rust-toolchain.toml installs the rest on demand) ---
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-toolchain nightly-2026-07-20 --profile minimal
+
+# --- release bun to drive the build scripts (CI uses 1.3.13) ---
+ARG BUN_VERSION=1.3.13
+RUN mkdir -p /tmp/bun-install \
+    && curl -fsSL --retry 5 "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip" -o /tmp/bun-install/bun.zip \
+    && unzip -q /tmp/bun-install/bun.zip -d /usr/local \
+    && ln -sf /usr/local/bun-linux-x64/bun /usr/local/bin/bun \
+    && bun --version
+
+# --- musl sysroot at /opt/linux-sysroot-musl (alpine 3.23, like CI) ---
+RUN set -eux; \
+    cd /tmp; \
+    ver=3.23; \
+    apk_ver=$(curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v${ver}/main/x86_64/APKINDEX.tar.gz" -o /tmp/apkidx.tar.gz \
+      && tar -xzOf /tmp/apkidx.tar.gz APKINDEX | awk '/^P:apk-tools-static$/{f=1} f&&/^V:/{print substr($0,3); exit}'); \
+    curl -fsSL "https://dl-cdn.alpinelinux.org/alpine/v${ver}/main/x86_64/apk-tools-static-${apk_ver}.apk" -o /tmp/apk.static.apk; \
+    mkdir -p /tmp/apk.static && tar -xzf /tmp/apk.static.apk -C /tmp/apk.static sbin/apk.static; \
+    rm -rf /opt/linux-sysroot-musl; \
+    /tmp/apk.static/sbin/apk.static --arch x86_64 --root /opt/linux-sysroot-musl \
+      --repository "https://dl-cdn.alpinelinux.org/alpine/v${ver}/main" \
+      --allow-untrusted --no-cache --initdb add \
+      musl-dev libc-dev linux-headers g++ libstdc++-dev; \
+    test -f /opt/linux-sysroot-musl/usr/lib/libc.so; \
+    rm -rf /tmp/apk.static /tmp/apk.static.apk /tmp/apkidx.tar.gz
+
+# static libstdc++ must exist in the sysroot for -static
+RUN test -f /opt/linux-sysroot-musl/usr/lib/libstdc++.a && echo "libstdc++.a OK"
+
+WORKDIR /src

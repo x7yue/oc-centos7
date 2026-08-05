@@ -1,0 +1,42 @@
+diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
+index c71d23e4b4..456115c80b 100644
+--- a/scripts/build/flags.ts
++++ b/scripts/build/flags.ts
+@@ -1186,6 +1186,19 @@ export const linkerFlags: Flag[] = [
+     when: c => c.linux && c.abi === "musl",
+     desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
+   },
++  {
++    // OpenTUI (TUI renderer) linked straight into the executable, plus the
++    // dlopen/dlsym interposition shim. musl static has no dynamic loader, so
++    // Bun.dlopen must "load" a fake handle and resolve symbols from the
++    // executable's own .symtab (see src/dl-symtab.c in the oc-centos7 repo).
++    // Paths are absolute: the build container mounts these files at /opt/static.
++    flag: [
++      "-Wl,--whole-archive,/opt/static/opentui/libopentui.a,--no-whole-archive",
++      "/opt/static/opentui/dl-symtab.o",
++    ],
++    when: c => c.linux && c.abi === "musl",
++    desc: "Static OpenTUI + dlopen/dlsym interposition (musl has no loader; FFI resolves from the exe .symtab)",
++  },
+   {
+     flag: c => [
+       `--target=${c.crossTarget!}`,
+@@ -1471,8 +1484,17 @@ export const stripFlags: Flag[] = [
+   {
+     // Core strip: symbols + debug info + local symbols.
+     flag: ["--strip-all", "--strip-debug", "--discard-all"],
++    when: c => !(c.linux && c.abi === "musl"),
+     desc: "Remove symbols, debug info, local symbols",
+   },
++  {
++    // musl static: the runtime dlopen fallback (dl-symtab.o) resolves FFI
++    // symbols from .symtab at runtime, so it must survive stripping. Debug
++    // sections are gone; only the symbol table (+ .strtab) is kept.
++    flag: ["--strip-debug"],
++    when: c => c.linux && c.abi === "musl",
++    desc: "musl: keep .symtab (runtime dlopen fallback resolves symbols from it)",
++  },
+   {
+     flag: [
+       "--remove-section=__TEXT,__eh_frame",
