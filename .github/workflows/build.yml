@@ -100,7 +100,8 @@ jobs:
           mkdir -p "$dist"
           cp opencode/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode "$dist/opencode-linux-x64-musl"
           cp bun/build/release-musl-static/bun "$dist/bun-linux-x64-musl-static"
-          so="$(find opencode -name 'libopentui.so' -path '*x64-musl*' | head -1)"
+          so="$(find opencode output/cache/opencode-node_modules -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)"
+          [ -n "$so" ] || so="$(find opencode -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)"
           cp "$so" "$dist/libopentui.so"
           (cd "$dist" && sha256sum * > sha256sums.txt)
           {
