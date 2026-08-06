@@ -46,7 +46,7 @@ log "compiling dl-symtab.o (x86_64-linux-musl)"
 # The clone's build.zig hardcodes .linkage = .dynamic; our patch threads a
 # -Dstatic-lib option through build() → buildSingleTarget() → buildTarget().
 # linux-musl links only dl/pthread (inside libc) + in-tree yoga C++.
-apply_patch "$OPENTUI_REPO" "$ROOT/patches/opentui-static-lib.patch"
+apply_patch "$OPENTUI_REPO" "$ROOT/patches/opentui-static-lib.patch" '"static-lib"'
 
 ensure_running "$BUN_CONTAINER" "$BUN_IMAGE"
 docker exec "$BUN_CONTAINER" sh -c 'rm -rf /opt/zig /opt/opentui && mkdir -p /opt/zig /opt/opentui'
@@ -62,6 +62,14 @@ if ! docker exec "$BUN_CONTAINER" sh -c \
     err "zig build failed — see $OUT/logs/opentui-build.log"; tail -30 "$OUT/logs/opentui-build.log"; exit 1
 fi
 docker cp "$BUN_CONTAINER:/opt/opentui/lib/x86_64-linux-musl/libopentui.a" "$OPENTUI_OUT/libopentui.a"
+
+# --- 5. undefined.rsp: every global definition, one --undefined per line.
+#        lld (bun's linker) expands this @file at link time; symbols forced
+#        with --undefined are GC roots, so gc-sections keeps exactly these
+#        definitions and runtime dlsym() finds them in the exe .symtab. ---
+nm "$OPENTUI_OUT/libopentui.a" 2>/dev/null | grep -E " [TDBRW] " | awk '{print "--undefined=" $3}' \
+    > "$OPENTUI_OUT/undefined.rsp"
+wc -l "$OPENTUI_OUT/undefined.rsp"
 ls -la "$OPENTUI_OUT"
 
 # --- 5. verify the FFI exports bun will look up ---
@@ -69,7 +77,7 @@ log "checking exports:"
 for sym in setLogCallback createEventSink destroyEventSink createNativeRenderable \
            destroyNativeRenderable createRenderer destroyRenderer setTerminalEnvVar \
            setUseThread setClearOnShutdown setBackgroundColor render; do
-    if nm "$OPENTUI_OUT/libopentui.a" 2>/dev/null | grep -qE " T $sym$"; then
+    if [ "$(nm "$OPENTUI_OUT/libopentui.a" 2>/dev/null | grep -cE " T $sym$")" -gt 0 ]; then
         echo "  ok  $sym"
     else
         err "  MISSING  $sym"

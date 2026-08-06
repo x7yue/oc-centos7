@@ -22,15 +22,19 @@ export HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY" http_proxy="$PROXY" https_proxy=
 log() { printf '\033[1;36m[%s]\033[0m %s\n' "$(basename "$0")" "$*"; }
 err() { printf '\033[1;31m[%s]\033[0m %s\n' "$(basename "$0")" "$*" >&2; }
 
-# apply_patch <repo> <patch>  — idempotent: applies, or no-ops if already applied.
+# apply_patch <repo> <patch> <marker> — idempotent:
+#   applies if not yet; no-ops if marker line is already present in the tree
+#   (overlapping patches defeat git apply's own fwd/rev checks).
 apply_patch() {
-    local repo="$1" patch="$2"
+    local repo="$1" patch="$2" marker="$3"
+    if grep -rqF -- "$marker" "$repo" 2>/dev/null; then
+        log "already applied: $(basename "$patch")"
+        return 0
+    fi
     if git -C "$repo" apply --check "$patch" 2>/dev/null; then
         git -C "$repo" apply "$patch" && log "applied: $(basename "$patch")"
-    elif git -C "$repo" apply --reverse --check "$patch" 2>/dev/null; then
-        log "already applied: $(basename "$patch")"
     else
-        err "patch does not apply (fwd or rev): $patch"
+        err "patch does not apply: $patch"
         exit 1
     fi
 }

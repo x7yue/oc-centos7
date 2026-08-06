@@ -15,21 +15,27 @@ ensure_running "$BUN_CONTAINER" "$BUN_IMAGE" \
     -e CARGO_BUILD_JOBS=2 \
     -e PATH=/usr/local/cargo/bin:/usr/lib/llvm-21/bin:/usr/local/bin:/usr/bin:/bin
 
+# revision is baked into the binary (build_options.rs); git must work in the container
+docker exec "$BUN_CONTAINER" sh -c 'git config --global --add safe.directory /src/bun; git -C /src/bun rev-parse --short HEAD'
+
 # --- 2. stage opentui artifacts at the hardcoded /opt/static paths (flags.ts patch) ---
 docker exec "$BUN_CONTAINER" sh -c 'rm -rf /opt/static/opentui && mkdir -p /opt/static/opentui'
-docker cp "$OPENTUI_OUT/libopentui.a" "$BUN_CONTAINER:/opt/static/opentui/libopentui.a"
-docker cp "$OPENTUI_OUT/dl-symtab.o"  "$BUN_CONTAINER:/opt/static/opentui/dl-symtab.o"
+docker cp "$OPENTUI_OUT/libopentui.a"       "$BUN_CONTAINER:/opt/static/opentui/libopentui.a"
+docker cp "$OPENTUI_OUT/dl-symtab.o"        "$BUN_CONTAINER:/opt/static/opentui/dl-symtab.o"
+docker cp "$OPENTUI_OUT/undefined.rsp" "$BUN_CONTAINER:/opt/static/opentui/undefined.rsp"
 
 # --- 3. apply patches (idempotent) ---
-apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-static.patch"
-apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-dlopen.patch"
+apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-static.patch" 'flag: ["-static"]'
+apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-dlopen.patch" '--whole-archive,/opt/static/opentui'
 
 # --- 4. build (incremental — only link + strip change) ---
+# Low concurrency on purpose: 7.8GB host RAM; -j4 + 2 cargo jobs thrashed
+# swap and crashed WSL. -j2 ninja, 1 cargo job, output streamed live.
 mkdir -p "$OUT/logs"
 log "building (profile=release, linux x64 musl)..."
-if ! docker exec "$BUN_CONTAINER" bash -c \
+if ! docker exec -e CARGO_BUILD_JOBS=1 "$BUN_CONTAINER" bash -c \
     'bun ./scripts/build.ts --profile=release --os=linux --arch=x64 --abi=musl \
-       --build-dir=build/release-musl-static -j4' >"$OUT/logs/bun-build.log" 2>&1; then
+       --build-dir=build/release-musl-static -j2' 2>&1 | tee "$OUT/logs/bun-build.log"; then
     err "build failed — tail:"; tail -50 "$OUT/logs/bun-build.log"; exit 1
 fi
 log "build OK (log: $OUT/logs/bun-build.log)"

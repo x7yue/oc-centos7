@@ -2,7 +2,7 @@ diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
 index c71d23e4b4..456115c80b 100644
 --- a/scripts/build/flags.ts
 +++ b/scripts/build/flags.ts
-@@ -1186,6 +1186,19 @@ export const linkerFlags: Flag[] = [
+@@ -1186,6 +1186,20 @@ export const linkerFlags: Flag[] = [
      when: c => c.linux && c.abi === "musl",
      desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
    },
@@ -15,6 +15,7 @@ index c71d23e4b4..456115c80b 100644
 +    flag: [
 +      "-Wl,--whole-archive,/opt/static/opentui/libopentui.a,--no-whole-archive",
 +      "/opt/static/opentui/dl-symtab.o",
++      "-Wl,@/opt/static/opentui/undefined.rsp",
 +    ],
 +    when: c => c.linux && c.abi === "musl",
 +    desc: "Static OpenTUI + dlopen/dlsym interposition (musl has no loader; FFI resolves from the exe .symtab)",

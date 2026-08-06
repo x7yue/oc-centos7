@@ -8,7 +8,7 @@ source "$(dirname "$0")/env.sh"
 BUN_BIN="$BUN_REPO/build/release-musl-static/bun"
 [ -f "$BUN_BIN" ] || { err "no static bun — run build-bun.sh first"; exit 1; }
 
-apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-build-targets.patch"
+apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-build-targets.patch" 'OPENCODE_ONLY_LINUX_X64_MUSL'
 
 # --- alpine container up ---
 ensure_running "$ALPINE_CONTAINER" "$ALPINE_IMAGE" \
