@@ -58,21 +58,24 @@ oc/
 
 ## 构建流程
 
-1. `scripts/build-opentui.sh`（宿主，无需容器）
+1. `scripts/build-opentui.sh`（宿主触发，构建在容器 `bun-build` 内）
    - clone opentui，pin `v0.4.5`（与 npm 包 @opentui/core 0.4.5 同源，保证 FFI ABI 一致）
-   - 下载 zig（`ziglang.org`，宿主 glibc 运行、交叉编译 musl 目标）
    - `zig cc -target x86_64-linux-musl` 编译 `dl-symtab.c` → `dl-symtab.o`
-   - `zig build`（或兜底 `zig build-lib`）→ `libopentui.a`，逐符号校验 FFI 导出
-2. `scripts/build-bun.sh`（容器 `bun-build` = bun-musl-build-env）
+   - `zig build -Dstatic-lib=true`（容器内，zig 包依赖需网络）→ `libopentui.a`
+   - **yoga C++ 不用 zig 编译**：zig cc 只支持自带 libc++（`std::__1` ABI），其运行时不在 bun 链接行上 → `build.zig` 在 static 模式改用系统 `clang++`（LLVM 21）+ musl sysroot 的 libstdc++ 15.2.0 逐文件编译 yoga 源码 → `libyoga_cxx.a`（独立产物，与 bun 自身 C++ 同一运行时）
+   - 逐符号校验 FFI 导出；生成 `undefined.rsp`（lld GC roots）
+2. `scripts/build-bun.sh`（容器 `bun-build`）
    - 产物拷入容器 `/opt/static/opentui/`（flags.ts 补丁中硬编码的绝对路径）
    - 幂等应用两个 bun 补丁 → `bun ./scripts/build.ts --profile=release --os=linux --arch=x64 --abi=musl --build-dir=build/release-musl-static -j4`
+   - 链接行：`--whole-archive` 同时链入 `libopentui.a` + `libyoga_cxx.a` + `dl-symtab.o` + `-Wl,@undefined.rsp`
    - 校验：静态、`.symtab` 保留、opentui 导出符号在
 3. `scripts/build-opencode.sh`（容器 `oc-build` = alpine-oc-build）
    - 静态 bun 拷为容器 `/usr/local/bin/bun`（宿主=目标 musl → `bun build --compile` 直接嵌入）
-   - `OPENCODE_CHANNEL=dev OPENCODE_ONLY_LINUX_X64_MUSL=1 bun run script/build.ts`
+   - `OPENCODE_CHANNEL=dev OPENCODE_ONLY_LINUX_X64_MUSL=1 bun run script/build.ts --skip-embed-web-ui`
+     （`--skip-embed-web-ui`：vite/rollup 需要 `.node` 原生模块，静态 musl bun 无加载器无法运行；跳过 web UI 嵌入不影响 TUI）
    - 产物：`packages/opencode/dist/opencode-linux-x64-musl/bin/opencode`
 4. `scripts/verify-centos7.sh`（容器 `c7` = centos:7）
-   - bun 基础；`Bun.dlopen(libopentui.so)` 直测拦截层；opencode `--version`、headless run、pty 下 TUI 冒烟
+   - bun 基础；`bun:ffi` 的 `dlopen(libopentui.so)` 直测拦截层（注意 bun 的 FFI API 是 `bun:ffi` 模块，非 `Bun.dlopen`）；opencode `--version`、headless run、pty 下 TUI 冒烟
 
 ## 关键风险与对策
 
