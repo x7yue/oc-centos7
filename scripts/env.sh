@@ -37,7 +37,11 @@ err() { printf '\033[1;31m[%s]\033[0m %s\n' "$(basename "$0")" "$*" >&2; }
 #   (overlapping patches defeat git apply's own fwd/rev checks).
 apply_patch() {
     local repo="$1" patch="$2" marker="$3"
-    if grep -rqF -- "$marker" "$repo" 2>/dev/null; then
+    # marker grep must not see build/ (cached artifacts may contain the
+    # marker string in old .o/rsp files and trick the patch into being
+    # skipped on a freshly-synced tree)
+    if grep -rqF --exclude-dir=.git --exclude-dir=node_modules \
+        --exclude-dir=build --exclude-dir=target -- "$marker" "$repo" 2>/dev/null; then
         log "already applied: $(basename "$patch")"
         return 0
     fi

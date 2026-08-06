@@ -47,5 +47,11 @@ PROFILE_BIN="$BUN_REPO/build/release-musl-static/bun-profile"
 file "$BIN"
 echo "--- ldd:"; ldd "$BIN" 2>&1 || true
 echo "--- .symtab kept? (must be >0):"
-nm "$BIN" 2>/dev/null | grep -cE " T (render|setLogCallback|createEventSink)$" || true
+SYMCOUNT=$(nm "$BIN" 2>/dev/null | grep -cE " T (render|setLogCallback|createEventSink)$" || true)
+echo "$SYMCOUNT"
+if [ "$SYMCOUNT" -eq 0 ]; then
+    err "dl-symtab symbols missing — the flags.ts patches did not take effect"
+    err "check the apply_patch markers (cached build/ can shadow them) and re-run"
+    exit 1
+fi
 echo "--- sizes:"; ls -la "$BIN" "$PROFILE_BIN" 2>/dev/null || true
