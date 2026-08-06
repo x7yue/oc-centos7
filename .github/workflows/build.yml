@@ -165,7 +165,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ needs.build.outputs.tag }}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release delete "$tag" -y
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" -y
           fi
-          gh release create "$tag" dist/* --title "$tag" --notes "$(cat dist/versions.txt)"
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "$(cat dist/versions.txt)"
