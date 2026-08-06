@@ -12,16 +12,17 @@ OCBIN="${OPENCODE_BIN:-$OPENCODE_REPO/packages/opencode/dist/opencode-linux-x64-
 [ -f "$BIN" ] || { err "no bun binary — run build-bun.sh first"; exit 1; }
 [ -f "$OCBIN" ] || { err "no opencode binary — run build-opencode.sh first"; exit 1; }
 
-# host copy of the real libopentui.so (from the npm package) for the dlopen test;
-# bun install stashes platform packages under node_modules/.bun/<name+platform>/
-LIBSO="${OPENTUI_SO:-$(find "$OPENCODE_REPO" -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)}"
-[ -n "$LIBSO" ] || { err "libopentui.so not found in node_modules"; exit 1; }
+# dlopen test target. The dl-symtab shim IGNORES the path (symbols come from
+# /proc/self/exe), so this needs no real libopentui.so — any existing ELF
+# works; the opencode binary itself is the most honest stand-in.
+LIBSO="${OPENTUI_SO:-$OCBIN}"
+[ -f "$LIBSO" ] || { err "dlopen test target not found: $LIBSO"; exit 1; }
 
 ensure_running "$C7_CONTAINER" "$C7_IMAGE"
 docker exec "$C7_CONTAINER" mkdir -p /opt/dist
 docker cp "$BIN"    "$C7_CONTAINER:/opt/dist/bun"
 docker cp "$OCBIN"  "$C7_CONTAINER:/opt/dist/opencode"
-docker cp "$LIBSO"  "$C7_CONTAINER:/opt/dist/libopentui.so"
+docker cp "$LIBSO"  "$C7_CONTAINER:/opt/dist/dlopen-target"
 docker exec "$C7_CONTAINER" chmod +x /opt/dist/bun /opt/dist/opencode
 
 echo "=== 1. bun basics ==="
@@ -30,7 +31,7 @@ docker exec "$C7_CONTAINER" /opt/dist/bun -e 'console.log(2 + 2)'
 echo "=== 2. bun FFI dlopen (dl-symtab interposition) ==="
 docker exec "$C7_CONTAINER" /opt/dist/bun -e '
   const { dlopen } = require("bun:ffi");
-  const lib = dlopen("/opt/dist/libopentui.so", {
+  const lib = dlopen("/opt/dist/dlopen-target", {
     render:      { args: ["ptr"], returns: "int", threadsafe_function_mode: "never" },
     setLogCallback: { args: ["ptr"], returns: "void" },
   });

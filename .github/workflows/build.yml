@@ -122,16 +122,6 @@ jobs:
           mkdir -p "$dist"
           cp opencode/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode "$dist/opencode-linux-x64-musl"
           cp bun/build/release-musl-static/bun "$dist/bun-linux-x64-musl-static"
-          so="$(find opencode output/cache/opencode-node_modules -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)"
-          [ -n "$so" ] || so="$(find opencode output/cache/opencode-node_modules -name 'libopentui.so' 2>/dev/null | head -1)"
-          if [ -z "$so" ]; then
-            echo "DIAG: no libopentui.so found; node_modules state:"
-            ls -la output/cache/opencode-node_modules 2>/dev/null | head -5
-            ls output/cache/opencode-node_modules/.bun 2>/dev/null | head -10
-            find output/cache/opencode-node_modules -name '*.so' 2>/dev/null | head -5
-            find opencode -name '*.so' 2>/dev/null | head -5
-          fi
-          cp "$so" "$dist/libopentui.so"
           (cd "$dist" && sha256sum * > sha256sums.txt)
           {
             echo "bun:        $(cat output/upstream/bun.sha)"
@@ -166,7 +156,6 @@ jobs:
         env:
           BUN_BIN: ${{ github.workspace }}/dist/bun-linux-x64-musl-static
           OPENCODE_BIN: ${{ github.workspace }}/dist/opencode-linux-x64-musl
-          OPENTUI_SO: ${{ github.workspace }}/dist/libopentui.so
         run: |
           cd oc
           ./scripts/verify-centos7.sh
