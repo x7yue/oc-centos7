@@ -44,7 +44,8 @@ jobs:
           echo "bun_ref=$bun_ref" >> "$GITHUB_ENV"
           echo "opencode_ref=$opencode_ref" >> "$GITHUB_ENV"
           echo "opentui_ref=$opentui_ref" >> "$GITHUB_ENV"
-          echo "resolved: bun=$bun_ref opencode=$opencode_ref opentui=$opentui_ref"
+          echo "patch_hash=$(sha256sum patches/*.patch | sha256sum | cut -c1-12)" >> "$GITHUB_ENV"
+          echo "resolved: bun=$bun_ref opencode=$opencode_ref opentui=$opentui_ref patches=$patch_hash"
 
       - name: Build docker images
         run: |
@@ -60,18 +61,39 @@ jobs:
           echo "opencode_sha=$(cat output/upstream/opencode.sha)" >> "$GITHUB_OUTPUT"
           echo "opentui_sha=$(cat output/upstream/opentui.sha)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache (bun build dir, zig, cargo registry)
+      # Artifact caches are keyed by their exact inputs; the build scripts
+      # skip when their artifact is already present and valid, so a cache
+      # hit turns a ~22 min build into a ~3 min one.
+      - name: Cache opentui artifacts
         uses: actions/cache@v4
         with:
           path: |
-            oc/bun/build/release-musl-static
+            oc/output/opentui
             oc/output/zig-0.15.2
+          key: oc-opentui-${{ env.opentui_ref }}-0.15.2
+
+      - name: Cache bun artifact
+        uses: actions/cache@v4
+        with:
+          path: oc/bun/build/release-musl-static
+          key: oc-bun-${{ env.bun_ref }}-${{ env.opentui_ref }}-${{ env.patch_hash }}
+
+      - name: Cache opencode artifact
+        uses: actions/cache@v4
+        with:
+          path: oc/opencode/packages/opencode/dist
+          key: oc-oc-${{ env.opencode_ref }}-${{ env.bun_ref }}-${{ env.patch_hash }}
+
+      - name: Cache deps (cargo registry, zig cache, opencode node_modules)
+        uses: actions/cache@v4
+        with:
+          path: |
             oc/output/cache/cargo-registry
             oc/output/cache/zig
             oc/output/cache/opencode-node_modules
-          key: oc-${{ env.bun_ref }}-${{ env.opencode_ref }}-${{ env.opentui_ref }}
+          key: oc-deps-${{ env.opencode_ref }}-${{ env.bun_ref }}
           restore-keys: |
-            oc-${{ env.bun_ref }}
+            oc-deps-${{ env.opencode_ref }}
 
       - name: Build opentui static lib
         run: |

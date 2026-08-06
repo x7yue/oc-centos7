@@ -10,6 +10,18 @@ source "$(dirname "$0")/env.sh"
 OPENTUI_TAG="${OPENTUI_TAG:-$(read_ref opentui ref)}"          # tag matching @opentui/core 0.4.5 (npm)
 ZIG_VERSION="${ZIG_VERSION:-0.15.2}"          # opentui pins 0.15.2 (checkZigVersion)
 
+# --- 0. artifact reuse: identical inputs produce identical outputs, so a
+#      valid previous build is reused as-is (FORCE_REBUILD=1 to rebuild).
+#      The CI cache key encodes <opentui tag>-<zig version>, so a cache hit
+#      means the artifacts match these exact inputs.
+if [ "${FORCE_REBUILD:-0}" != "1" ]; then
+    if [ -s "$OPENTUI_OUT/libopentui.a" ] && [ -s "$OPENTUI_OUT/libyoga_cxx.a" ] \
+        && [ -s "$OPENTUI_OUT/dl-symtab.o" ] && [ -s "$OPENTUI_OUT/undefined.rsp" ]; then
+        log "opentui artifacts already present — skipping build (FORCE_REBUILD=1 to rebuild)"
+        exit 0
+    fi
+fi
+
 mkdir -p "$OUT/logs" "$OPENTUI_OUT"
 
 # --- 1. clone (pinned to the tag the npm package was built from) ---

@@ -8,6 +8,24 @@ source "$(dirname "$0")/env.sh"
 
 [ -f "$OPENTUI_OUT/libopentui.a" ] || "$ROOT/scripts/build-opentui.sh"
 
+BIN="$BUN_REPO/build/release-musl-static/bun"
+
+# --- 0. artifact reuse. The CI cache key encodes <bun ref>-<opentui ref>,
+#      and the patches live in this repo (pinned refs → pinned patches), so a
+#      present artifact with the dl-symtab symbols is exactly the product of
+#      this build's inputs. FORCE_REBUILD=1 bypasses.
+bun_valid() {
+    [ "${FORCE_REBUILD:-0}" = "1" ] && return 1
+    [ -x "$BIN" ] || return 1
+    file "$BIN" 2>/dev/null | grep -q "statically linked" || return 1
+    [ "$(nm "$BIN" 2>/dev/null | grep -cE ' T (render|setLogCallback|createEventSink)$' || true)" -gt 0 ] || return 1
+}
+if bun_valid; then
+    log "bun artifact already valid — skipping build (FORCE_REBUILD=1 to rebuild)"
+    echo "--- sizes:"; ls -la "$BIN"
+    exit 0
+fi
+
 # --- 1. build container up ---
 ensure_running "$BUN_CONTAINER" "$BUN_IMAGE" \
     -v "$BUN_REPO":/src/bun \
@@ -42,7 +60,6 @@ fi
 log "build OK (log: $OUT/logs/bun-build.log)"
 
 # --- 5. verify ---
-BIN="$BUN_REPO/build/release-musl-static/bun"
 PROFILE_BIN="$BUN_REPO/build/release-musl-static/bun-profile"
 file "$BIN"
 echo "--- ldd:"; ldd "$BIN" 2>&1 || true

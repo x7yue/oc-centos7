@@ -8,6 +8,21 @@ source "$(dirname "$0")/env.sh"
 BUN_BIN="$BUN_REPO/build/release-musl-static/bun"
 [ -f "$BUN_BIN" ] || { err "no static bun — run build-bun.sh first"; exit 1; }
 
+# --- 0. artifact reuse. The CI cache key encodes <opencode ref>-<bun ref>;
+#      a statically-linked existing binary is the product of these inputs.
+#      FORCE_REBUILD=1 bypasses.
+OC_BIN="$OPENCODE_REPO/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode"
+oc_valid() {
+    [ "${FORCE_REBUILD:-0}" = "1" ] && return 1
+    [ -x "$OC_BIN" ] || return 1
+    file "$OC_BIN" 2>/dev/null | grep -q "statically linked" || return 1
+}
+if oc_valid; then
+    log "opencode artifact already valid — skipping build (FORCE_REBUILD=1 to rebuild)"
+    ls -la "$OC_BIN"
+    exit 0
+fi
+
 apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-build-targets.patch" 'OPENCODE_ONLY_LINUX_X64_MUSL'
 
 # --- alpine container up ---
