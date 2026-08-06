@@ -48,7 +48,14 @@ log "compiling dl-symtab.o (x86_64-linux-musl)"
 # linux-musl links only dl/pthread (inside libc) + in-tree yoga C++.
 apply_patch "$OPENTUI_REPO" "$ROOT/patches/opentui-static-lib.patch" '"static-lib"'
 
-ensure_running "$BUN_CONTAINER" "$BUN_IMAGE"
+# same mounts as build-bun.sh: the container is shared, and the bun build
+# steps run inside it (git + /src/bun) — creating it without mounts here
+# would leave build-bun.sh with a mountless container
+ensure_running "$BUN_CONTAINER" "$BUN_IMAGE" \
+    -v "$BUN_REPO":/src/bun \
+    -w /src/bun \
+    -e CARGO_BUILD_JOBS=2 \
+    -e PATH=/usr/local/cargo/bin:/usr/lib/llvm-21/bin:/usr/local/bin:/usr/bin:/bin
 docker exec "$BUN_CONTAINER" sh -c 'rm -rf /opt/zig /opt/opentui && mkdir -p /opt/zig /opt/opentui'
 docker cp "$(dirname "$ZIG_BIN")/." "$BUN_CONTAINER:/opt/zig/"
 docker cp "$OPENTUI_REPO/packages/core/src/zig/." "$BUN_CONTAINER:/opt/opentui/"
