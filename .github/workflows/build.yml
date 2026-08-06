@@ -1,6 +1,6 @@
 name: build
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       bun_ref:
