@@ -80,14 +80,14 @@ jobs:
 
       - name: Build bun (static musl + opentui + dl-symtab)
         env:
-          OPT_RUN_ARGS: "-v $GITHUB_WORKSPACE/oc/output/cache/cargo-registry:/usr/local/cargo/registry -v $GITHUB_WORKSPACE/oc/output/cache/zig:/root/.cache/zig"
+          OPT_RUN_ARGS: "-v ${{ github.workspace }}/oc/output/cache/cargo-registry:/usr/local/cargo/registry -v ${{ github.workspace }}/oc/output/cache/zig:/root/.cache/zig"
         run: |
           cd oc
           ./scripts/build-bun.sh
 
       - name: Build opencode standalone
         env:
-          OPT_RUN_ARGS: "-v $GITHUB_WORKSPACE/oc/output/cache/opencode-node_modules:/src/opencode/node_modules"
+          OPT_RUN_ARGS: "-v ${{ github.workspace }}/oc/output/cache/opencode-node_modules:/src/opencode/node_modules"
         run: |
           cd oc
           ./scripts/build-opencode.sh
