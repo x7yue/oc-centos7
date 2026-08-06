@@ -1,18 +1,9 @@
 diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
-index b5cc852770..69ca24e7e1 100644
---- a/scripts/build/flags.ts
-+++ b/scripts/build/flags.ts
-@@ -1182,9 +1182,23 @@ export const linkerFlags: Flag[] = [
-     desc: "Static C++ runtime (don't depend on host libstdc++)",
+index 0000000..0000000 100644
+@@ -1187,6 +1187,20 @@
+     desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
    },
    {
--    flag: ["-lstdc++", "-lgcc"],
-+    flag: ["-static"],
-     when: c => c.linux && c.abi === "musl",
--    desc: "Dynamic C++ runtime on musl (static unavailable)",
-+    desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
-+  },
-+  {
 +    // OpenTUI (TUI renderer) linked straight into the executable, plus the
 +    // dlopen/dlsym interposition shim. musl static has no dynamic loader, so
 +    // Bun.dlopen must "load" a fake handle and resolve symbols from the
@@ -25,28 +16,19 @@ index b5cc852770..69ca24e7e1 100644
 +    ],
 +    when: c => c.linux && c.abi === "musl",
 +    desc: "Static OpenTUI + dlopen/dlsym interposition (musl has no loader; FFI resolves from the exe .symtab)",
-   },
-   {
++  },
++  {
      flag: c => [
-@@ -1331,8 +1345,8 @@ export const linkerFlags: Flag[] = [
-       `-Wl,--dynamic-list=${c.cwd}/src/symbols.dyn`,
-       `-Wl,--version-script=${c.cwd}/src/linker.lds`,
-     ],
--    when: c => c.linux,
--    desc: "Dynamic symbol list + version script",
-+    when: c => c.linux && c.abi !== "musl",
-+    desc: "Dynamic symbol list + version script (musl is fully static: no dynsym, version script errors)",
-   },
-   // ─── FreeBSD ───
-   {
-@@ -1471,8 +1485,17 @@ export const stripFlags: Flag[] = [
+       `--target=${c.crossTarget!}`,
+       `--sysroot=${c.sysroot!}`,
+@@ -1471,9 +1485,18 @@
    {
      // Core strip: symbols + debug info + local symbols.
      flag: ["--strip-all", "--strip-debug", "--discard-all"],
 +    when: c => !(c.linux && c.abi === "musl"),
      desc: "Remove symbols, debug info, local symbols",
    },
-+  {
+   {
 +    // musl static: the runtime dlopen fallback (dl-symtab.o) resolves FFI
 +    // symbols from .symtab at runtime, so it must survive stripping. Debug
 +    // sections are gone; only the symbol table (+ .strtab) is kept.
@@ -54,6 +36,7 @@ index b5cc852770..69ca24e7e1 100644
 +    when: c => c.linux && c.abi === "musl",
 +    desc: "musl: keep .symtab (runtime dlopen fallback resolves symbols from it)",
 +  },
-   {
++  {
      flag: [
        "--remove-section=__TEXT,__eh_frame",
+       "--remove-section=__TEXT,__unwind_info",

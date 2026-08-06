@@ -69,19 +69,23 @@ sync_one() {
     echo "$name"
 }
 
+# Patches may be stacked (bun-flags-dlopen builds on bun-flags-static), so
+# preflight applies them in order on the pristine tree and then resets it.
 preflight_patches() {
     local name="$1" dir="$2"
     shift 2
     local failed=0
     for p in "$@"; do
-        if git -C "$dir" apply --check "$p" 2>/dev/null; then
+        if git -C "$dir" apply "$p" 2>/dev/null; then
             log "preflight OK: $(basename "$p") ($name)"
         else
             err "patch does not apply on $name: $p"
             err "upstream changed the context — rework the patch (see README 'Upgrading upstreams')."
             failed=1
+            break
         fi
     done
+    git -C "$dir" checkout -- .
     [ "$failed" -eq 0 ]
 }
 
