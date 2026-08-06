@@ -63,6 +63,14 @@ if ! docker exec "$BUN_CONTAINER" sh -c \
 fi
 docker cp "$BUN_CONTAINER:/opt/opentui/lib/x86_64-linux-musl/libopentui.a" "$OPENTUI_OUT/libopentui.a"
 
+# libyoga_cxx.a lands in the zig cache (its install step is only attached
+# to the default install step, not the build-* step we invoke).
+latest_yoga=$(docker exec "$BUN_CONTAINER" sh -c 'ls -t /opt/opentui/.zig-cache/o/*/libyoga_cxx.a 2>/dev/null | head -1')
+if [ -z "$latest_yoga" ]; then
+    err "libyoga_cxx.a not found in zig cache"; exit 1
+fi
+docker cp "$BUN_CONTAINER:$latest_yoga" "$OPENTUI_OUT/libyoga_cxx.a"
+
 # --- 5. undefined.rsp: every global definition, one --undefined per line.
 #        lld (bun's linker) expands this @file at link time; symbols forced
 #        with --undefined are GC roots, so gc-sections keeps exactly these

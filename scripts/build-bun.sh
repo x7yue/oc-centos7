@@ -21,6 +21,7 @@ docker exec "$BUN_CONTAINER" sh -c 'git config --global --add safe.directory /sr
 # --- 2. stage opentui artifacts at the hardcoded /opt/static paths (flags.ts patch) ---
 docker exec "$BUN_CONTAINER" sh -c 'rm -rf /opt/static/opentui && mkdir -p /opt/static/opentui'
 docker cp "$OPENTUI_OUT/libopentui.a"       "$BUN_CONTAINER:/opt/static/opentui/libopentui.a"
+docker cp "$OPENTUI_OUT/libyoga_cxx.a"      "$BUN_CONTAINER:/opt/static/opentui/libyoga_cxx.a"
 docker cp "$OPENTUI_OUT/dl-symtab.o"        "$BUN_CONTAINER:/opt/static/opentui/dl-symtab.o"
 docker cp "$OPENTUI_OUT/undefined.rsp" "$BUN_CONTAINER:/opt/static/opentui/undefined.rsp"
 

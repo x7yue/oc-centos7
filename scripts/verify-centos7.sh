@@ -12,8 +12,9 @@ OCBIN="$OPENCODE_REPO/packages/opencode/dist/opencode-linux-x64-musl/bin/opencod
 [ -f "$BIN" ] || { err "no bun binary — run build-bun.sh first"; exit 1; }
 [ -f "$OCBIN" ] || { err "no opencode binary — run build-opencode.sh first"; exit 1; }
 
-# host copy of the real libopentui.so (from the npm package) for the dlopen test
-LIBSO="$(find "$OPENCODE_REPO/packages/opencode/node_modules/@opentui" -name 'libopentui.so' 2>/dev/null | head -1)"
+# host copy of the real libopentui.so (from the npm package) for the dlopen test;
+# bun install stashes platform packages under node_modules/.bun/<name+platform>/
+LIBSO="$(find "$OPENCODE_REPO" -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)"
 [ -n "$LIBSO" ] || { err "libopentui.so not found in node_modules"; exit 1; }
 
 ensure_running "$C7_CONTAINER" "$C7_IMAGE"
@@ -28,7 +29,8 @@ docker exec "$C7_CONTAINER" /opt/dist/bun --version
 docker exec "$C7_CONTAINER" /opt/dist/bun -e 'console.log(2 + 2)'
 echo "=== 2. bun FFI dlopen (dl-symtab interposition) ==="
 docker exec "$C7_CONTAINER" /opt/dist/bun -e '
-  const lib = Bun.dlopen("/opt/dist/libopentui.so", {
+  const { dlopen } = require("bun:ffi");
+  const lib = dlopen("/opt/dist/libopentui.so", {
     render:      { args: ["ptr"], returns: "int", threadsafe_function_mode: "never" },
     setLogCallback: { args: ["ptr"], returns: "void" },
   });

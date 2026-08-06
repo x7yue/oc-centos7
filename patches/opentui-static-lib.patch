@@ -1,23 +1,91 @@
 diff --git a/packages/core/src/zig/build.zig b/packages/core/src/zig/build.zig
-index 0c82ba3..f12e4e5 100644
+index 0c82ba3..82a78ef 100644
 --- a/packages/core/src/zig/build.zig
 +++ b/packages/core/src/zig/build.zig
-@@ -36,8 +36,12 @@ const ROOT_SOURCE_FILE = "lib.zig";
+@@ -36,6 +36,15 @@ const ROOT_SOURCE_FILE = "lib.zig";
  
  const YOGA_CXX_FLAGS = [_][]const u8{
      "-std=c++20",
--    "-fexceptions",
--    "-frtti",
-+    // No exceptions/RTTI: yoga itself never throws; libc++ headers then
-+    // lower throw-sites to abort(), which drops the std::__1 exception
-+    // vtables/typeinfos that would otherwise be undefined at final link
-+    // (bun links libstdc++, not libc++).
-+    "-fno-exceptions",
-+    "-fno-rtti",
++    // Compile yoga against libstdc++ (same runtime bun links implicitly),
++    // not zig's bundled libc++: the final bun link line has no libc++,
++    // so libc++ ABI symbols (std::__1::__throw_*) would be undefined.
++    // Headers come from the musl sysroot's libstdc++-dev.
++    "--stdlib=libstdc++",
++    "-nostdinc++",
++    "-isystem", "/opt/linux-sysroot-musl/usr/include/c++/15.2.0",
++    "-isystem", "/opt/linux-sysroot-musl/usr/include/c++/15.2.0/x86_64-alpine-linux-musl",
++    "-isystem", "/opt/linux-sysroot-musl/usr/include/c++/15.2.0/backward",
+     "-fexceptions",
+     "-frtti",
  };
+@@ -197,9 +206,17 @@ fn addNativeAudioDependencies(
+     }
+ }
  
- const YOGA_CXX_SOURCES = [_][]const u8{
-@@ -275,6 +279,7 @@ pub fn build(b: *std.Build) void {
+-fn addYogaDependencies(b: *std.Build, artifact: *std.Build.Step.Compile) void {
++fn addYogaDependencies(b: *std.Build, artifact: *std.Build.Step.Compile, static_lib: bool) ?*std.Build.Step.InstallFile {
+     const yoga_dep = b.dependency("yoga", .{});
+ 
++    if (static_lib) {
++        // Static mode: compile yoga with the system clang++ against the
++        // musl sysroot's libstdc++ (same C++ runtime bun links). zig cc
++        // only supports its bundled libc++ (std::__1 ABI), whose runtime
++        // is never present on bun's final link line.
++        return addYogaWithSystemCxx(b, artifact, yoga_dep);
++    }
++
+     artifact.linkLibCpp();
+     artifact.addIncludePath(yoga_dep.path(""));
+     artifact.addCSourceFiles(.{
+@@ -207,6 +224,47 @@ fn addYogaDependencies(b: *std.Build, artifact: *std.Build.Step.Compile) void {
+         .files = &YOGA_CXX_SOURCES,
+         .flags = &YOGA_CXX_FLAGS,
+     });
++    return null;
++}
++
++fn addYogaWithSystemCxx(b: *std.Build, artifact: *std.Build.Step.Compile, yoga_dep: *std.Build.Dependency) *std.Build.Step.InstallFile {
++    const sysroot = "/opt/linux-sysroot-musl";
++    const gxx_ver = "15.2.0";
++    const base_args = [_][]const u8{
++        "/usr/lib/llvm-21/bin/clang++",
++        "-c",
++        "-std=c++20",
++        "-O2",
++        "-fexceptions",
++        "-frtti",
++        "-nostdinc",
++        "--sysroot=" ++ sysroot,
++        "-isystem", sysroot ++ "/usr/include/c++/" ++ gxx_ver,
++        "-isystem", sysroot ++ "/usr/include/c++/" ++ gxx_ver ++ "/x86_64-alpine-linux-musl",
++        "-isystem", sysroot ++ "/usr/include/c++/" ++ gxx_ver ++ "/backward",
++        "-isystem", sysroot ++ "/usr/include",
++        "-isystem", sysroot ++ "/usr/include/x86_64-alpine-linux-musl",
++        "-D_GNU_SOURCE",
++    };
++
++    var objs: [YOGA_CXX_SOURCES.len]std.Build.LazyPath = undefined;
++    const yoga_root = yoga_dep.path("").getPath(b);
++    for (YOGA_CXX_SOURCES, 0..) |src, i| {
++        const cmd = b.addSystemCommand(&base_args);
++        cmd.addArg("-isystem");
++        cmd.addArg(yoga_root);
++        cmd.addFileArg(yoga_dep.path(src));
++        cmd.addArg("-o");
++        objs[i] = cmd.addOutputFileArg(b.fmt("yoga-cxx-{d}.o", .{i}));
++    }
++
++    const ar = b.addSystemCommand(&.{ "ar", "rcs" });
++    const lib = ar.addOutputFileArg("libyoga_cxx.a");
++    for (objs) |o| ar.addFileArg(o);
++
++    artifact.addIncludePath(yoga_dep.path(""));
++
++    return b.addInstallFileWithDir(lib, .{ .custom = "../lib/x86_64-linux-musl" }, "libyoga_cxx.a");
+ }
+ 
+ /// Apply dependencies to a module
+@@ -275,6 +333,7 @@ pub fn build(b: *std.Build) void {
      const debug_use_llvm = b.option(bool, "debug-llvm", "Use LLVM backend for debug/test artifacts");
      const target_option = b.option([]const u8, "target", "Build for specific target (e.g., 'x86_64-linux-gnu.2.17').");
      const build_all = b.option(bool, "all", "Build for all supported targets") orelse false;
@@ -25,7 +93,7 @@ index 0c82ba3..f12e4e5 100644
      const gpa_safe_stats = b.option(bool, "gpa-safe-stats", "Enable GPA safety checks for trustworthy allocator stats") orelse false;
      const macos_sdk_path = resolveMacOSSDKPath(b);
      const build_options = b.addOptions();
-@@ -282,7 +287,7 @@ pub fn build(b: *std.Build) void {
+@@ -282,7 +341,7 @@ pub fn build(b: *std.Build) void {
  
      if (target_option) |target_str| {
          // Build single target
@@ -34,7 +102,25 @@ index 0c82ba3..f12e4e5 100644
              std.debug.print("Error building target '{s}': {}\n", .{ target_str, err });
              std.process.exit(1);
          };
-@@ -397,6 +402,7 @@ fn buildAllTargets(
+@@ -320,7 +379,7 @@ pub fn build(b: *std.Build) void {
+         std.process.exit(1);
+     }
+     addNativeAudioDependencies(b, test_artifact, native_target, macos_sdk_path);
+-    addYogaDependencies(b, test_artifact);
++    _ = addYogaDependencies(b, test_artifact, static_lib);
+ 
+     const run_test = b.addRunArtifact(test_artifact);
+     test_step.dependOn(&run_test.step);
+@@ -360,7 +419,7 @@ pub fn build(b: *std.Build) void {
+         std.process.exit(1);
+     }
+     addNativeAudioDependencies(b, bench_ffi_lib, native_target, macos_sdk_path);
+-    addYogaDependencies(b, bench_ffi_lib);
++    _ = addYogaDependencies(b, bench_ffi_lib, false);
+     const install_bench_ffi = b.addInstallArtifact(bench_ffi_lib, .{});
+     bench_ffi_step.dependOn(&install_bench_ffi.step);
+     bench_step.dependOn(bench_ffi_step);
+@@ -397,6 +456,7 @@ fn buildAllTargets(
              optimize,
              build_options,
              macos_sdk_path,
@@ -42,7 +128,7 @@ index 0c82ba3..f12e4e5 100644
          );
      }
  }
-@@ -424,6 +430,7 @@ fn buildNativeTarget(
+@@ -424,6 +484,7 @@ fn buildNativeTarget(
                  optimize,
                  build_options,
                  macos_sdk_path,
@@ -50,7 +136,7 @@ index 0c82ba3..f12e4e5 100644
              );
              return;
          }
-@@ -439,6 +446,7 @@ fn buildSingleTarget(
+@@ -439,6 +500,7 @@ fn buildSingleTarget(
      optimize: std.builtin.OptimizeMode,
      build_options: *std.Build.Step.Options,
      macos_sdk_path: ?[]const u8,
@@ -58,7 +144,7 @@ index 0c82ba3..f12e4e5 100644
  ) !void {
      // Check if it matches a known target, use its output_name
      for (SUPPORTED_TARGETS) |supported_target| {
-@@ -451,13 +459,14 @@ fn buildSingleTarget(
+@@ -451,13 +513,14 @@ fn buildSingleTarget(
                  optimize,
                  build_options,
                  macos_sdk_path,
@@ -74,7 +160,7 @@ index 0c82ba3..f12e4e5 100644
  }
  
  fn buildTarget(
-@@ -468,6 +477,7 @@ fn buildTarget(
+@@ -468,6 +531,7 @@ fn buildTarget(
      optimize: std.builtin.OptimizeMode,
      build_options: *std.Build.Step.Options,
      macos_sdk_path: ?[]const u8,
@@ -82,7 +168,7 @@ index 0c82ba3..f12e4e5 100644
  ) !void {
      const target_query = try std.Target.Query.parse(.{ .arch_os_abi = zig_target });
      const target = b.resolveTargetQuery(target_query);
-@@ -488,7 +498,7 @@ fn buildTarget(
+@@ -488,11 +552,11 @@ fn buildTarget(
      const lib = b.addLibrary(.{
          .name = LIB_NAME,
          .root_module = module,
@@ -91,3 +177,17 @@ index 0c82ba3..f12e4e5 100644
      });
  
      addNativeAudioDependencies(b, lib, target, macos_sdk_path);
+-    addYogaDependencies(b, lib);
++    const yoga_install = addYogaDependencies(b, lib, static_lib);
+ 
+     const install_dir = b.addInstallArtifact(lib, .{
+         .dest_dir = .{
+@@ -505,6 +569,8 @@ fn buildTarget(
+     const build_step_name = try std.fmt.allocPrint(b.allocator, "build-{s}", .{output_name});
+     const build_step = b.step(build_step_name, try std.fmt.allocPrint(b.allocator, "Build for {s}", .{description}));
+     build_step.dependOn(&install_dir.step);
++    if (yoga_install) |yi| build_step.dependOn(&yi.step);
++
+ 
+     b.getInstallStep().dependOn(&install_dir.step);
+ }

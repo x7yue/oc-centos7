@@ -24,7 +24,7 @@ docker exec "$ALPINE_CONTAINER" sh -c 'cd /src/opencode && bun install --ignore-
 
 log "building opencode (linux-x64-musl only)..."
 if ! docker exec "$ALPINE_CONTAINER" sh -c \
-    'cd /src/opencode/packages/opencode && OPENCODE_CHANNEL=dev OPENCODE_ONLY_LINUX_X64_MUSL=1 bun run script/build.ts' \
+    'cd /src/opencode/packages/opencode && OPENCODE_CHANNEL=dev OPENCODE_ONLY_LINUX_X64_MUSL=1 bun run script/build.ts --skip-embed-web-ui' \
     >"$OUT/logs/opencode-build.log" 2>&1; then
     err "build failed — tail:"; tail -50 "$OUT/logs/opencode-build.log"; exit 1
 fi
