@@ -7,7 +7,7 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 
-OPENTUI_TAG="${OPENTUI_TAG:-v0.4.5}"          # tag matching @opentui/core 0.4.5 (npm)
+OPENTUI_TAG="${OPENTUI_TAG:-$(read_ref opentui ref)}"          # tag matching @opentui/core 0.4.5 (npm)
 ZIG_VERSION="${ZIG_VERSION:-0.15.2}"          # opentui pins 0.15.2 (checkZigVersion)
 
 mkdir -p "$OUT/logs" "$OPENTUI_OUT"

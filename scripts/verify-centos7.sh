@@ -7,14 +7,14 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 
-BIN="$BUN_REPO/build/release-musl-static/bun"
-OCBIN="$OPENCODE_REPO/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode"
+BIN="${BUN_BIN:-$BUN_REPO/build/release-musl-static/bun}"
+OCBIN="${OPENCODE_BIN:-$OPENCODE_REPO/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode}"
 [ -f "$BIN" ] || { err "no bun binary — run build-bun.sh first"; exit 1; }
 [ -f "$OCBIN" ] || { err "no opencode binary — run build-opencode.sh first"; exit 1; }
 
 # host copy of the real libopentui.so (from the npm package) for the dlopen test;
 # bun install stashes platform packages under node_modules/.bun/<name+platform>/
-LIBSO="$(find "$OPENCODE_REPO" -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)"
+LIBSO="${OPENTUI_SO:-$(find "$OPENCODE_REPO" -name 'libopentui.so' -path '*x64-musl*' 2>/dev/null | head -1)}"
 [ -n "$LIBSO" ] || { err "libopentui.so not found in node_modules"; exit 1; }
 
 ensure_running "$C7_CONTAINER" "$C7_IMAGE"
