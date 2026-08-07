@@ -8,10 +8,14 @@ index 0000000..0000000 100644
 +    // dlopen/dlsym interposition shim. musl static has no dynamic loader, so
 +    // Bun.dlopen must "load" a fake handle and resolve symbols from the
 +    // executable's own .symtab (see src/dl-symtab.c in the oc-centos7 repo).
-+    // Paths are absolute: the build container mounts these files at /opt/static.
++    // oc-version.o is a generated build-id marker (oc_build_id string, see
++    // build-bun.sh); --undefined keeps it from gc-sections. Paths are
++    // absolute: the build container mounts these files at /opt/static.
 +    flag: [
 +      "-Wl,--whole-archive,/opt/static/opentui/libopentui.a,/opt/static/opentui/libyoga_cxx.a,--no-whole-archive",
 +      "/opt/static/opentui/dl-symtab.o",
++      "/opt/static/opentui/oc-version.o",
++      "-Wl,--undefined=oc_build_id",
 +      "-Wl,@/opt/static/opentui/undefined.rsp",
 +    ],
 +    when: c => c.linux && c.abi === "musl",

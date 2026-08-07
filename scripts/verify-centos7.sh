@@ -28,6 +28,18 @@ docker exec "$C7_CONTAINER" chmod +x /opt/dist/bun /opt/dist/opencode
 echo "=== 1. bun basics ==="
 docker exec "$C7_CONTAINER" /opt/dist/bun --version
 docker exec "$C7_CONTAINER" /opt/dist/bun -e 'console.log(2 + 2)'
+echo "=== 1.5 oc build-id marker (bun) ==="
+if [ -n "${OC_BUILD_ID:-}" ]; then
+    strings "$BIN" 2>/dev/null | grep -qF "$OC_BUILD_ID" \
+        && log "ok  bun carries the exact build id" \
+        || { err "bun build-id mismatch — expected: $OC_BUILD_ID"; err "found: $(strings "$BIN" 2>/dev/null | grep '^oc-build:' | head -1)"; exit 1; }
+    nm "$BIN" 2>/dev/null | grep -q " oc_build_id$" \
+        && log "ok  oc_build_id in .symtab (dlsym-able)" \
+        || { err "oc_build_id symbol missing from bun .symtab"; exit 1; }
+else
+    log "OC_BUILD_ID not set — presence check only:"
+    strings "$BIN" 2>/dev/null | grep '^oc-build:' | head -1
+fi
 echo "=== 2. bun FFI dlopen (dl-symtab interposition) ==="
 docker exec "$C7_CONTAINER" /opt/dist/bun -e '
   const { dlopen } = require("bun:ffi");
@@ -38,7 +50,25 @@ docker exec "$C7_CONTAINER" /opt/dist/bun -e '
   console.log("dlopen OK, render @", lib.symbols.render);
 ' || { err "dlopen test failed"; exit 1; }
 echo "=== 3. opencode headless ==="
-docker exec "$C7_CONTAINER" /opt/dist/opencode --version
+OCV="$(docker exec "$C7_CONTAINER" /opt/dist/opencode --version)"
+echo "opencode --version: $OCV"
+if [ -n "${OC_VERSION:-}" ]; then
+    echo "$OCV" | grep -qF "$OC_VERSION" \
+        && log "ok  --version carries the oc release id" \
+        || { err "--version mismatch — expected: $OC_VERSION"; exit 1; }
+fi
+echo "=== 3.5 oc build-id marker (opencode) ==="
+if strings "$OCBIN" 2>/dev/null | grep -q '^oc-build:'; then
+    if [ -n "${OC_BUILD_ID:-}" ]; then
+        strings "$OCBIN" 2>/dev/null | grep -qF "$OC_BUILD_ID" \
+            && log "ok  opencode exe carries the exact build id (embedded bun runtime)" \
+            || { err "opencode build-id mismatch — expected: $OC_BUILD_ID"; exit 1; }
+    else
+        strings "$OCBIN" 2>/dev/null | grep '^oc-build:' | head -1
+    fi
+else
+    log "warn: no oc-build: marker in opencode exe (runtime likely embedded compressed) — identity via --version only"
+fi
 echo "=== 4. opencode TUI (pty, 15s) ==="
 docker exec "$C7_CONTAINER" bash -c \
   'cd /tmp && TERM=xterm-256color timeout 15 script -qec /opt/dist/opencode /dev/null' \

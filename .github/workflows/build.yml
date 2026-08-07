@@ -28,6 +28,8 @@ jobs:
       bun_sha: ${{ steps.sync.outputs.bun_sha }}
       opencode_sha: ${{ steps.sync.outputs.opencode_sha }}
       opentui_sha: ${{ steps.sync.outputs.opentui_sha }}
+      oc_build_id: ${{ steps.ocid.outputs.oc_build_id }}
+      oc_version: ${{ steps.ocid.outputs.oc_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +62,29 @@ jobs:
           echo "bun_sha=$(cat output/upstream/bun.sha)" >> "$GITHUB_OUTPUT"
           echo "opencode_sha=$(cat output/upstream/opencode.sha)" >> "$GITHUB_OUTPUT"
           echo "opentui_sha=$(cat output/upstream/opentui.sha)" >> "$GITHUB_OUTPUT"
+
+      # The oc release identity: a tag, an opencode --version, and a build-id
+      # marker baked into the binaries. The marker is computed after sync (the
+      # resolved SHAs) and flows into build-bun.sh (oc-version.o) and the
+      # package/verify steps; OPENCODE_VERSION bakes the oc version into the
+      # opencode binary via build-opencode.sh.
+      - name: Compute oc build id
+        id: ocid
+        run: |
+          cd oc
+          bun8="$(cut -c1-8 output/upstream/bun.sha)"
+          ref_san="$(echo "$opencode_ref" | tr '/:' '-')"
+          tag="${{ inputs.tag }}"
+          [ -n "$tag" ] || tag="oc-${ref_san}-$(date -u +%Y%m%d)-${bun8}"
+          oc_version="${opencode_ref#v}-oc-$(date -u +%Y%m%d)-${bun8}"
+          oc_build_id="oc-build:tag=${tag} opencode=${opencode_ref}/$(cat output/upstream/opencode.sha) bun=$(cat output/upstream/bun.sha) opentui=${opentui_ref}/$(cat output/upstream/opentui.sha) patches=${patch_hash}"
+          echo "OC_TAG=$tag" >> "$GITHUB_ENV"
+          echo "OC_VERSION=$oc_version" >> "$GITHUB_ENV"
+          echo "OC_BUILD_ID=$oc_build_id" >> "$GITHUB_ENV"
+          echo "oc_build_id=$oc_build_id" >> "$GITHUB_OUTPUT"
+          echo "oc_version=$oc_version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"
+          echo "build id: $oc_build_id"
 
       # Artifact caches are keyed by their exact inputs; the build scripts
       # skip when their artifact is already present and valid, so a cache
@@ -124,13 +149,15 @@ jobs:
           cp bun/build/release-musl-static/bun "$dist/bun-linux-x64-musl-static"
           (cd "$dist" && sha256sum * > sha256sums.txt)
           {
+            echo "oc tag:     $OC_TAG"
+            echo "oc version: $OC_VERSION"
+            echo "oc build:   $OC_BUILD_ID"
             echo "bun:        $(cat output/upstream/bun.sha)"
             echo "opencode:   $(cat output/upstream/opencode.sha)"
             echo "opentui:    $(cat output/upstream/opentui.sha)"
             echo "build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > "$dist/versions.txt"
-          tag="${{ inputs.tag }}"
-          [ -n "$tag" ] || tag="oc-$(date +%Y%m%d)-$(cat output/upstream/bun.sha | cut -c1-8)"
+          tag="$OC_TAG"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           ls -la "$dist"
 
@@ -156,6 +183,8 @@ jobs:
         env:
           BUN_BIN: ${{ github.workspace }}/dist/bun-linux-x64-musl-static
           OPENCODE_BIN: ${{ github.workspace }}/dist/opencode-linux-x64-musl
+          OC_BUILD_ID: ${{ needs.build.outputs.oc_build_id }}
+          OC_VERSION: ${{ needs.build.outputs.oc_version }}
         run: |
           cd oc
           ./scripts/verify-centos7.sh
