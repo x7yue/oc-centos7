@@ -5,7 +5,7 @@
     "note": "Canary commit, NOT a release tag: bun's release tags still use the legacy build system (no scripts/build/flags.ts). The ninja-based build system this pipeline targets exists only on the main branch. Upgrade = bump this SHA and re-check patches/bun-flags-*.patch with scripts/sync-upstream.sh."
   },
   "opencode": {
-    "ref": "v1.4.9",
+    "ref": "v1.18.15",
     "kind": "tag"
   },
   "opentui": {
