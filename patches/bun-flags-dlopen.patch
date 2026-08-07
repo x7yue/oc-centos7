@@ -1,6 +1,6 @@
 diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
 index 0000000..0000000 100644
-@@ -1187,6 +1187,20 @@
+@@ -1187,6 +1187,24 @@
      desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
    },
    {
