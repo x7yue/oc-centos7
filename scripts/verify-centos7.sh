@@ -57,7 +57,9 @@ docker exec "$C7_CONTAINER" bash -c \
     > "$OUT/logs/tui-centos7.log" 2>&1
 tui_status=$?
 set -e
-if [ "$tui_status" -ne 124 ] || [ "$(wc -c < "$OUT/logs/tui-centos7.log")" -lt 100 ] \
+if { [ "$tui_status" -ne 0 ] && [ "$tui_status" -ne 124 ]; } \
+    || [ "$(wc -c < "$OUT/logs/tui-centos7.log")" -lt 100 ] \
+    || ! grep -q 'OpenCode' "$OUT/logs/tui-centos7.log" \
     || grep -Eqi 'Failed to open library|Dynamic loading not supported|Error:|panic:' "$OUT/logs/tui-centos7.log"; then
     err "TUI smoke failed (status=$tui_status)"
     tail -60 "$OUT/logs/tui-centos7.log"
