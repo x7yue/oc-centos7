@@ -1,22 +1,23 @@
 diff --git a/scripts/build/flags.ts b/scripts/build/flags.ts
 index 0000000..0000000 100644
-@@ -1187,6 +1187,24 @@
+@@ -1187,6 +1187,25 @@
      desc: "Fully static musl link (portable to hosts without musl/glibc, e.g. CentOS 7)",
    },
    {
-+    // OpenTUI (TUI renderer) linked straight into the executable, plus the
-+    // dlopen/dlsym interposition shim. musl static has no dynamic loader, so
-+    // Bun.dlopen must "load" a fake handle and resolve symbols from the
-+    // executable's own .symtab (see src/dl-symtab.c in the oc-centos7 repo).
-+    // oc-version.o is a generated build-id marker (oc_build_id string, see
-+    // build-bun.sh); --undefined keeps it from gc-sections. Paths are
-+    // absolute: the build container mounts these files at /opt/static.
++    // OpenTUI FFI exports are forced before the archives, but archive members
++    // are loaded lazily. Bun's bundled libwebp then satisfies shared symbols
++    // without duplicate definitions. musl static has no dynamic loader, so
++    // Bun.dlopen resolves FFI symbols from the executable's own .symtab.
++    // oc-version.o carries the build id; --undefined keeps it after GC.
++    // The build container mounts these artifacts at /opt/static/opentui.
++    // See src/dl-symtab.c for the runtime resolver.
 +    flag: [
-+      "-Wl,--whole-archive,/opt/static/opentui/libopentui.a,/opt/static/opentui/libyoga_cxx.a,--no-whole-archive",
++      "-Wl,@/opt/static/opentui/undefined.rsp",
++      "/opt/static/opentui/libopentui.a",
++      "/opt/static/opentui/libyoga_cxx.a",
 +      "/opt/static/opentui/dl-symtab.o",
 +      "/opt/static/opentui/oc-version.o",
 +      "-Wl,--undefined=oc_build_id",
-+      "-Wl,@/opt/static/opentui/undefined.rsp",
 +    ],
 +    when: c => c.linux && c.abi === "musl",
 +    desc: "Static OpenTUI + dlopen/dlsym interposition (musl has no loader; FFI resolves from the exe .symtab)",
@@ -25,7 +26,7 @@ index 0000000..0000000 100644
      flag: c => [
        `--target=${c.crossTarget!}`,
        `--sysroot=${c.sysroot!}`,
-@@ -1471,9 +1485,18 @@
+@@ -1471,9 +1486,18 @@
    {
      // Core strip: symbols + debug info + local symbols.
      flag: ["--strip-all", "--strip-debug", "--discard-all"],

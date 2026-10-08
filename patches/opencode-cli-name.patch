@@ -1,0 +1,11 @@
+diff --git a/packages/cli/script/build.ts b/packages/cli/script/build.ts
+--- a/packages/cli/script/build.ts
++++ b/packages/cli/script/build.ts
+@@ -151,6 +151,6 @@ for (const item of targets) {
+     define: {
+       OPENCODE_VERSION: `'${Script.version}'`,
+-      OPENCODE_CLI_NAME: "'opencode'",
++      OPENCODE_CLI_NAME: "'opencode2'",
+       OPENCODE_CHANNEL: `'${Script.channel}'`,
+       OPENCODE_ARTIFACT: `'cli'`,
+       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "undefined",
