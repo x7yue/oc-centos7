@@ -57,7 +57,7 @@ sync_one() {
     #   opencode node_modules (bun install)
     case "$name" in
         bun) git -C "$dir" clean -fdx -e build/release-musl-static ;;
-        opencode) git -C "$dir" clean -fdx -e node_modules -e packages/opencode/node_modules ;;
+        opencode) git -C "$dir" clean -fdx -e node_modules -e packages/cli/node_modules ;;
         *) git -C "$dir" clean -fdx ;;
     esac
     git -C "$dir" config user.email "ci@local" 2>/dev/null || true
@@ -99,7 +99,8 @@ preflight_patches bun "$BUN_REPO" \
     "$ROOT/patches/bun-flags-static.patch" \
     "$ROOT/patches/bun-flags-dlopen.patch"
 preflight_patches opencode "$OPENCODE_REPO" \
-    "$ROOT/patches/opencode-build-targets.patch"
+    "$ROOT/patches/opencode-prebuilt-web-ui.patch" \
+    "$ROOT/patches/opencode-cli-name.patch"
 preflight_patches opentui "$OPENTUI_REPO" \
     "$ROOT/patches/opentui-static-lib.patch"
 

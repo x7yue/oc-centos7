@@ -4,135 +4,176 @@ name: build
   workflow_dispatch:
     inputs:
       bun_ref:
-        description: "bun ref (default: versions.json pin — canary commit, see versions.json)"
+        description: "Bun ref (default: versions.json pin)"
         required: false
       opencode_ref:
-        description: "opencode ref (default: versions.json pin, e.g. v1.4.9)"
+        description: "OpenCode v2 ref (default: versions.json pin)"
         required: false
       opentui_ref:
-        description: "opentui ref (default: versions.json pin, e.g. v0.4.5)"
+        description: "OpenTUI ref (default: versions.json pin)"
         required: false
       skip_verify:
-        description: "Skip the CentOS 7 verification job (build only)"
+        description: "Build artifacts only; do not verify or release"
+        type: boolean
+        default: false
+      skip_release:
+        description: "Verify on CentOS 7 without creating a release"
         type: boolean
         default: false
       tag:
-        description: "Release tag (default: oc-<date>-<bun short sha>)"
+        description: "Release tag (default: deterministic source/patch identity)"
         required: false
+
+concurrency:
+  group: centos7-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     outputs:
-      tag: ${{ steps.package.outputs.tag }}
-      bun_sha: ${{ steps.sync.outputs.bun_sha }}
-      opencode_sha: ${{ steps.sync.outputs.opencode_sha }}
-      opentui_sha: ${{ steps.sync.outputs.opentui_sha }}
-      oc_build_id: ${{ steps.ocid.outputs.oc_build_id }}
-      oc_version: ${{ steps.ocid.outputs.oc_version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      oc_build_id: ${{ steps.identity.outputs.oc_build_id }}
+      oc_version: ${{ steps.identity.outputs.oc_version }}
     steps:
       - uses: actions/checkout@v4
         with:
           path: oc
 
-      - name: Resolve refs
-        id: refs
+      - name: Resolve pinned refs
+        env:
+          INPUT_BUN_REF: ${{ inputs.bun_ref }}
+          INPUT_OPENCODE_REF: ${{ inputs.opencode_ref }}
+          INPUT_OPENTUI_REF: ${{ inputs.opentui_ref }}
         run: |
           cd oc
-          bun_ref="${{ inputs.bun_ref }}"; opencode_ref="${{ inputs.opencode_ref }}"; opentui_ref="${{ inputs.opentui_ref }}"
-          [ -n "$bun_ref" ] || bun_ref="$(jq -r .bun.ref versions.json)"
-          [ -n "$opencode_ref" ] || opencode_ref="$(jq -r .opencode.ref versions.json)"
-          [ -n "$opentui_ref" ] || opentui_ref="$(jq -r .opentui.ref versions.json)"
-          echo "bun_ref=$bun_ref" >> "$GITHUB_ENV"
-          echo "opencode_ref=$opencode_ref" >> "$GITHUB_ENV"
-          echo "opentui_ref=$opentui_ref" >> "$GITHUB_ENV"
-          echo "patch_hash=$(sha256sum patches/*.patch | sha256sum | cut -c1-12)" >> "$GITHUB_ENV"
-          echo "resolved: bun=$bun_ref opencode=$opencode_ref opentui=$opentui_ref patches=$patch_hash"
+          bun_ref="${INPUT_BUN_REF:-$(jq -r .bun.ref versions.json)}"
+          opencode_ref="${INPUT_OPENCODE_REF:-$(jq -r .opencode.ref versions.json)}"
+          opentui_ref="${INPUT_OPENTUI_REF:-$(jq -r .opentui.ref versions.json)}"
+          {
+            echo "bun_ref=$bun_ref"
+            echo "opencode_ref=$opencode_ref"
+            echo "opentui_ref=$opentui_ref"
+            echo "patch_hash=$(sha256sum patches/*.patch | sha256sum | cut -c1-16)"
+            echo "zig_version=0.16.0"
+          } >> "$GITHUB_ENV"
 
-      - name: Build docker images
-        run: |
-          cd oc
-          ./scripts/build-images.sh
-
-      - name: Sync upstreams + patch preflight
-        id: sync
+      - name: Sync upstreams and preflight patches
         run: |
           cd oc
           ./scripts/sync-upstream.sh "$bun_ref" "$opencode_ref" "$opentui_ref"
-          echo "bun_sha=$(cat output/upstream/bun.sha)" >> "$GITHUB_OUTPUT"
-          echo "opencode_sha=$(cat output/upstream/opencode.sha)" >> "$GITHUB_OUTPUT"
-          echo "opentui_sha=$(cat output/upstream/opentui.sha)" >> "$GITHUB_OUTPUT"
+          {
+            echo "bun_sha=$(cat output/upstream/bun.sha)"
+            echo "opencode_sha=$(cat output/upstream/opencode.sha)"
+            echo "opentui_sha=$(cat output/upstream/opentui.sha)"
+          } >> "$GITHUB_ENV"
 
-      # The oc release identity: a tag, an opencode --version, and a build-id
-      # marker baked into the binaries. The marker is computed after sync (the
-      # resolved SHAs) and flows into build-bun.sh (oc-version.o) and the
-      # package/verify steps; OPENCODE_VERSION bakes the oc version into the
-      # opencode binary via build-opencode.sh.
-      - name: Compute oc build id
-        id: ocid
+      - name: Compute immutable build identity
+        id: identity
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          SKIP_VERIFY: ${{ inputs.skip_verify }}
+          SKIP_RELEASE: ${{ inputs.skip_release }}
         run: |
           cd oc
-          bun8="$(cut -c1-8 output/upstream/bun.sha)"
-          ref_san="$(echo "$opencode_ref" | tr '/:' '-')"
-          tag="${{ inputs.tag }}"
-          [ -n "$tag" ] || tag="oc-${ref_san}-$(date -u +%Y%m%d)-${bun8}"
-          oc_version="${opencode_ref#v}-oc-$(date -u +%Y%m%d)-${bun8}"
-          oc_build_id="oc-build:tag=${tag} opencode=${opencode_ref}/$(cat output/upstream/opencode.sha) bun=$(cat output/upstream/bun.sha) opentui=${opentui_ref}/$(cat output/upstream/opentui.sha) patches=${patch_hash}"
-          echo "OC_TAG=$tag" >> "$GITHUB_ENV"
-          echo "OC_VERSION=$oc_version" >> "$GITHUB_ENV"
-          echo "OC_BUILD_ID=$oc_build_id" >> "$GITHUB_ENV"
-          echo "oc_build_id=$oc_build_id" >> "$GITHUB_OUTPUT"
-          echo "oc_version=$oc_version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag"
-          echo "build id: $oc_build_id"
+          bun8="${bun_sha:0:8}"
+          tui8="${opentui_sha:0:8}"
+          ref_san="$(printf '%s' "$opencode_ref" | tr -c 'A-Za-z0-9._-' '-')"
+          tag="${INPUT_TAG:-oc-${ref_san}-b${bun8}-t${tui8}-p${patch_hash}}"
+          oc_version="$(jq -r .version opencode/packages/cli/package.json)"
+          [[ "$tag" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Invalid release tag: $tag" >&2; exit 1; }
+          [[ "$oc_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]] || { echo "Invalid OpenCode package version: $oc_version" >&2; exit 1; }
+          build_id="oc-build:tag=${tag} opencode=${opencode_sha} bun=${bun_sha} opentui=${opentui_sha} patches=${patch_hash}"
+          build_hash="$(printf '%s' "$build_id" | sha256sum | cut -c1-16)"
+          if [ "$SKIP_VERIFY" != true ] && [ "$SKIP_RELEASE" != true ] && gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; choose a new tag for a new build" >&2
+            exit 1
+          fi
+          {
+            echo "OC_TAG=$tag"
+            echo "OC_VERSION=$oc_version"
+            echo "OC_BUILD_ID=$build_id"
+            echo "build_hash=$build_hash"
+          } >> "$GITHUB_ENV"
+          {
+            echo "tag=$tag"
+            echo "oc_version=$oc_version"
+            echo "oc_build_id=$build_id"
+          } >> "$GITHUB_OUTPUT"
+          echo "$build_id"
 
-      # Artifact caches are keyed by their exact inputs; the build scripts
-      # skip when their artifact is already present and valid, so a cache
-      # hit turns a ~22 min build into a ~3 min one.
-      - name: Cache opentui artifacts
-        uses: actions/cache@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Bun toolchain image
+        uses: docker/build-push-action@v6
+        with:
+          context: oc
+          file: oc/docker/Dockerfile.bunmusl
+          load: true
+          tags: bun-musl-build-env:latest
+          cache-from: type=gha,scope=bun-toolchain
+          cache-to: type=gha,scope=bun-toolchain,mode=min
+
+      - name: Build OpenCode packaging image
+        uses: docker/build-push-action@v6
+        with:
+          context: oc
+          file: oc/docker/Dockerfile.alpine-oc
+          load: true
+          tags: alpine-oc-build:latest
+          cache-from: type=gha,scope=opencode-toolchain
+          cache-to: type=gha,scope=opencode-toolchain,mode=min
+
+      - uses: actions/cache@v4
         with:
           path: |
             oc/output/opentui
-            oc/output/zig-0.15.2
-          key: oc-opentui-${{ env.opentui_ref }}-0.15.2
+            oc/output/zig-0.16.0
+          key: opentui-${{ env.opentui_sha }}-${{ env.zig_version }}-${{ hashFiles('oc/patches/opentui-static-lib.patch', 'oc/src/dl-symtab.c') }}
 
-      - name: Cache bun artifact
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: oc/bun/build/release-musl-static
-          key: oc-bun-${{ env.bun_ref }}-${{ env.opentui_ref }}-${{ env.patch_hash }}
+          key: bun-${{ env.bun_sha }}-${{ env.opentui_sha }}-${{ env.build_hash }}
 
-      - name: Cache opencode artifact
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
-          path: oc/opencode/packages/opencode/dist
-          key: oc-oc-${{ env.opencode_ref }}-${{ env.bun_ref }}-${{ env.patch_hash }}
+          path: oc/opencode/packages/cli/dist
+          key: opencode-${{ env.opencode_sha }}-${{ env.build_hash }}
 
-      - name: Cache deps (cargo registry, zig cache, opencode node_modules)
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             oc/output/cache/cargo-registry
             oc/output/cache/zig
             oc/output/cache/opencode-node_modules
-          key: oc-deps-${{ env.opencode_ref }}-${{ env.bun_ref }}
+          key: deps-${{ env.bun_sha }}-${{ env.opencode_sha }}-${{ env.zig_version }}
           restore-keys: |
-            oc-deps-${{ env.opencode_ref }}
+            deps-${{ env.bun_sha }}-
+            deps-
 
-      - name: Build opentui static lib
-        run: |
-          cd oc
-          ./scripts/build-opentui.sh
-
-      - name: Build bun (static musl + opentui + dl-symtab)
+      - name: Build OpenTUI static library
         env:
           OPT_RUN_ARGS: "-v ${{ github.workspace }}/oc/output/cache/cargo-registry:/usr/local/cargo/registry -v ${{ github.workspace }}/oc/output/cache/zig:/root/.cache/zig"
         run: |
           cd oc
+          ./scripts/build-opentui.sh
+
+      - name: Build Bun static musl runtime
+        env:
+          OPT_RUN_ARGS: "-v ${{ github.workspace }}/oc/output/cache/cargo-registry:/usr/local/cargo/registry -v ${{ github.workspace }}/oc/output/cache/zig:/root/.cache/zig"
+          CARGO_BUILD_JOBS: 2
+          BUN_BUILD_JOBS: 2
+        run: |
+          cd oc
           ./scripts/build-bun.sh
 
-      - name: Build opencode standalone
+      - name: Build OpenCode v2 standalone
         env:
           OPT_RUN_ARGS: "-v ${{ github.workspace }}/oc/output/cache/opencode-node_modules:/src/opencode/node_modules"
         run: |
@@ -140,37 +181,35 @@ jobs:
           ./scripts/build-opencode.sh
 
       - name: Package artifacts
-        id: package
         run: |
           cd oc
           dist=output/dist
           mkdir -p "$dist"
-          cp opencode/packages/opencode/dist/opencode-linux-x64-musl/bin/opencode "$dist/opencode-linux-x64-musl"
+          cp opencode/packages/cli/dist/cli-linux-x64-musl/bin/opencode "$dist/opencode2-linux-x64-musl"
           cp bun/build/release-musl-static/bun "$dist/bun-linux-x64-musl-static"
-          (cd "$dist" && sha256sum * > sha256sums.txt)
           {
-            echo "oc tag:     $OC_TAG"
-            echo "oc version: $OC_VERSION"
-            echo "oc build:   $OC_BUILD_ID"
-            echo "bun:        $(cat output/upstream/bun.sha)"
-            echo "opencode:   $(cat output/upstream/opencode.sha)"
-            echo "opentui:    $(cat output/upstream/opentui.sha)"
-            echo "build date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "release: $OC_TAG"
+            echo "opencode package: @opencode/cli $OC_VERSION"
+            echo "build id: $OC_BUILD_ID"
+            echo "bun: $bun_sha"
+            echo "opencode: $opencode_sha"
+            echo "opentui: $opentui_sha"
           } > "$dist/versions.txt"
-          tag="$OC_TAG"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          ls -la "$dist"
+          (cd "$dist" && sha256sum bun-linux-x64-musl-static opencode2-linux-x64-musl versions.txt > sha256sums.txt)
+          ls -lh "$dist"
 
       - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: oc/output/dist
           retention-days: 90
+          if-no-files-found: error
 
   verify:
     if: ${{ !inputs.skip_verify }}
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -179,18 +218,28 @@ jobs:
         with:
           name: dist
           path: dist
+      - name: Verify checksums
+        run: |
+          cd dist
+          sha256sum -c sha256sums.txt
       - name: Verify on CentOS 7
         env:
           BUN_BIN: ${{ github.workspace }}/dist/bun-linux-x64-musl-static
-          OPENCODE_BIN: ${{ github.workspace }}/dist/opencode-linux-x64-musl
+          OPENCODE_BIN: ${{ github.workspace }}/dist/opencode2-linux-x64-musl
           OC_BUILD_ID: ${{ needs.build.outputs.oc_build_id }}
           OC_VERSION: ${{ needs.build.outputs.oc_version }}
         run: |
           cd oc
           ./scripts/verify-centos7.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verify-logs
+          path: oc/output/logs
+          if-no-files-found: ignore
 
   release:
-    if: ${{ always() && needs.build.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
+    if: ${{ !inputs.skip_release && needs.verify.result == 'success' }}
     needs: [build, verify]
     runs-on: ubuntu-latest
     permissions:
@@ -200,12 +249,9 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Create release
+      - name: Create immutable release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
-          tag="${{ needs.build.outputs.tag }}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" -y
-          fi
-          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --title "$tag" --notes "$(cat dist/versions.txt)"
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file dist/versions.txt

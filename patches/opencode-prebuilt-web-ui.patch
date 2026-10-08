@@ -1,0 +1,14 @@
+diff --git a/packages/cli/script/app-assets.ts b/packages/cli/script/app-assets.ts
+--- a/packages/cli/script/app-assets.ts
++++ b/packages/cli/script/app-assets.ts
+@@ -7,6 +7,7 @@ export async function buildAppArchive(channel: string, options?: { skipBuild?: boolean }) {
+   if (options?.skipBuild) return "{}"
+   const root = path.resolve(import.meta.dirname, "../../app")
+-  await $`bun run build`
+-    .cwd(root)
+-    .env({ ...process.env, OPENCODE_CHANNEL: channel, VITE_OPENCODE_SERVER_MODE: "origin" })
++  if (!process.env.OPENCODE_PREBUILT_WEB_UI)
++    await $`bun run build`
++      .cwd(root)
++      .env({ ...process.env, OPENCODE_CHANNEL: channel, VITE_OPENCODE_SERVER_MODE: "origin" })
+   return JSON.stringify(

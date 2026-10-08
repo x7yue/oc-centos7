@@ -1,8 +1,14 @@
 # Builds opencode standalone with our fully-static musl bun.
-# Host bun == target (musl) -> `bun build --compile` embeds our static runtime.
+# The official musl Bun builds dependencies and the web UI. The adapted Bun
+# is copied into the container for the final standalone compile.
 FROM alpine:3.23
 
-RUN apk add --no-cache git curl ca-certificates unzip tar xz
-# static bun will be mounted at /usr/local/bin/bun at runtime
+RUN apk add --no-cache git curl ca-certificates unzip tar xz libstdc++
+ARG BUN_VERSION=1.4.2
+RUN curl -fsSL --retry 5 "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64-musl.zip" -o /tmp/bun.zip \
+    && unzip -q /tmp/bun.zip -d /opt \
+    && ln -s /opt/bun-linux-x64-musl/bun /usr/local/bin/bun \
+    && rm /tmp/bun.zip
+# Upstream Bun builds the web UI; the adapted Bun is selected only for --compile.
 
 WORKDIR /src/opencode
