@@ -4,6 +4,7 @@
 # web UI; the adapted Bun is used only for the final standalone compile.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
+source "$(dirname "$0")/validation.sh"
 
 BUN_BIN="$BUN_REPO/build/release-musl-static/bun"
 [ -f "$BUN_BIN" ] || { err "no static bun — run build-bun.sh first"; exit 1; }
@@ -14,7 +15,7 @@ oc_valid() {
     [ -x "$OC_BIN" ] || return 1
     file "$OC_BIN" 2>/dev/null | grep -q "statically linked" || return 1
     [ -n "${OC_VERSION:-}" ] || return 1
-    [ "$("$OC_BIN" --version 2>/dev/null)" = "$OC_VERSION" ] || return 1
+    opencode_version_matches "$("$OC_BIN" --version 2>/dev/null)" "$OC_VERSION" || return 1
     if strings "$OC_BIN" 2>/dev/null | grep "oc-build:" >/dev/null; then
         [ -n "${OC_BUILD_ID:-}" ] || return 1
         strings "$OC_BIN" 2>/dev/null | grep -F "$OC_BUILD_ID" >/dev/null || return 1

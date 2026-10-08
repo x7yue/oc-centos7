@@ -14,18 +14,18 @@
 
 ## GitHub Actions
 
-在 Actions 中手动运行 `build` 工作流。默认读取 `versions.json`，也可以覆盖三个 ref 或发布 tag。
+PR 会自动运行 `build` 工作流并通过 CentOS 7 验证；PR 构建不会发布。正式发行在 Actions 中手动运行同一工作流，默认读取 `versions.json`，也可以覆盖三个 ref 或发布 tag。
 
 1. 克隆固定上游提交并预检所有补丁；任何上下文漂移立即失败。
 2. 使用 Buildx 缓存构建工具链镜像，依次构建 OpenTUI 静态库、静态 Bun、包含 Web UI 的 OpenCode v2 CLI。
 3. 上传 `opencode2-linux-x64-musl`、`bun-linux-x64-musl-static`、校验和与版本身份文件。
-4. 在独立的 CentOS 7 job 中核对校验和、Bun/FFI、`opencode2` CLI、TUI 存活以及 Web UI HTTP 响应。**仅验证成功才创建 Release**。
+4. 在独立的 CentOS 7 job 中核对校验和、Bun/FFI、`opencode2` CLI、TUI 存活以及 Web UI HTTP 响应。**仅手动发行且验证成功才创建 Release**。
 
-`skip_verify=true` 只用于取得构建产物：验证 job 和 Release 都会跳过。Release tag 默认由 OpenCode ref、Bun/OpenTUI 提交和补丁哈希组成；同名 Release 已存在时工作流会提前失败，不覆盖已有发行物。
+`skip_verify=true` 只用于取得构建产物：验证 job 和 Release 都会跳过。Release tag 默认由 OpenCode ref、Bun/OpenTUI 提交和补丁哈希组成；同名 tag 已存在时工作流会提前失败。正式发行要求仓库启用 immutable releases，先将全部附件上传到草稿，再发布并核对 tag 指向和不可变状态。
 
 验证分支可使用 `skip_release=true`：完整执行 CentOS 7 验证，但不创建 Release。
 
-缓存按解析后的提交、补丁/构建身份和 Zig 版本隔离；脚本还会检查产物本身，避免仅凭缓存命中跳过构建。构建日志留在 `output/logs/`，CentOS 7 验证日志会作为 `verify-logs` 上传。
+缓存按解析后的提交、补丁/构建身份和 Zig 版本隔离；脚本还会检查产物本身，避免仅凭缓存命中跳过构建。构建日志作为 `build-logs` 上传，CentOS 7 验证日志作为 `verify-logs` 上传，失败时仍会保留已产生的日志。
 
 ## 发行物
 

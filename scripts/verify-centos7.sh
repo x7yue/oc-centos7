@@ -2,6 +2,7 @@
 # GitHub Actions gate: exercise the shipped binaries inside CentOS 7.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
+source "$(dirname "$0")/validation.sh"
 
 BIN="${BUN_BIN:-$BUN_REPO/build/release-musl-static/bun}"
 OCBIN="${OPENCODE_BIN:-$OPENCODE_REPO/packages/cli/dist/cli-linux-x64-musl/bin/opencode}"
@@ -41,7 +42,7 @@ log "OpenCode v2 CLI"
 OCV="$(docker exec "$C7_CONTAINER" /opt/dist/opencode2 --version)"
 printf 'opencode2 --version: %s\n' "$OCV"
 if [ -n "${OC_VERSION:-}" ]; then
-    test "$OCV" = "opencode2 v$OC_VERSION" || { err "OpenCode version mismatch: $OCV"; exit 1; }
+    opencode_version_matches "$OCV" "$OC_VERSION" || { err "OpenCode version mismatch: $OCV"; exit 1; }
 fi
 docker exec "$C7_CONTAINER" /opt/dist/opencode2 --help > "$OUT/logs/opencode-help.log"
 grep -q 'serve' "$OUT/logs/opencode-help.log"
@@ -57,10 +58,7 @@ docker exec "$C7_CONTAINER" bash -c \
     > "$OUT/logs/tui-centos7.log" 2>&1
 tui_status=$?
 set -e
-if { [ "$tui_status" -ne 0 ] && [ "$tui_status" -ne 124 ]; } \
-    || [ "$(wc -c < "$OUT/logs/tui-centos7.log")" -lt 100 ] \
-    || ! grep -q 'OpenCode' "$OUT/logs/tui-centos7.log" \
-    || grep -Eqi 'Failed to open library|Dynamic loading not supported|Error:|panic:' "$OUT/logs/tui-centos7.log"; then
+if ! tui_smoke_valid "$tui_status" "$OUT/logs/tui-centos7.log"; then
     err "TUI smoke failed (status=$tui_status)"
     tail -60 "$OUT/logs/tui-centos7.log"
     exit 1
