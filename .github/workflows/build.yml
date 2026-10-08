@@ -134,7 +134,7 @@ jobs:
           path: |
             oc/output/opentui
             oc/output/zig-0.16.0
-          key: opentui-${{ env.opentui_sha }}-${{ env.zig_version }}-${{ hashFiles('oc/patches/opentui-static-lib.patch', 'oc/src/dl-symtab.c') }}
+          key: opentui-${{ env.opentui_sha }}-${{ env.zig_version }}-${{ hashFiles('oc/patches/opentui-static-lib.patch', 'oc/src/dl-symtab.c', 'oc/scripts/build-opentui.sh') }}
 
       - uses: actions/cache@v4
         with:

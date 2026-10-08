@@ -85,7 +85,7 @@ docker cp "$OPENTUI_OUT/undefined.rsp" "$BUN_CONTAINER:/opt/static/opentui/undef
 
 # --- 3. apply patches (idempotent) ---
 apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-static.patch" 'flag: ["-static"]'
-apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-dlopen.patch" '--whole-archive,/opt/static/opentui'
+apply_patch "$BUN_REPO" "$ROOT/patches/bun-flags-dlopen.patch" '"/opt/static/opentui/libopentui.a"'
 
 # --- 4. build (incremental — only link + strip change) ---
 # Keep concurrency bounded by the GitHub runner's resources.

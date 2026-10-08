@@ -7,8 +7,9 @@ OPENTUI_TAG="${OPENTUI_TAG:-$(read_ref opentui ref)}"
 ZIG_VERSION="${ZIG_VERSION:-0.16.0}"
 PATCH_SHA="$(sha256sum "$ROOT/patches/opentui-static-lib.patch" | cut -d' ' -f1)"
 DL_SHA="$(sha256sum "$ROOT/src/dl-symtab.c" | cut -d' ' -f1)"
+SCRIPT_SHA="$(sha256sum "$ROOT/scripts/build-opentui.sh" | cut -d' ' -f1)"
 SOURCE_SHA="$(cat "$OUT/upstream/opentui.sha" 2>/dev/null || git -C "$OPENTUI_REPO" rev-parse HEAD 2>/dev/null || true)"
-MARKER="opentui=${SOURCE_SHA} zig=${ZIG_VERSION} patch=${PATCH_SHA} dl=${DL_SHA}"
+MARKER="opentui=${SOURCE_SHA} zig=${ZIG_VERSION} patch=${PATCH_SHA} dl=${DL_SHA} script=${SCRIPT_SHA}"
 
 if [ "${FORCE_REBUILD:-0}" != "1" ] && [ "$(cat "$OPENTUI_OUT/build-inputs.txt" 2>/dev/null)" = "$MARKER" ] \
     && [ -s "$OPENTUI_OUT/libopentui.a" ] && [ -s "$OPENTUI_OUT/libyoga_cxx.a" ] \
@@ -24,7 +25,7 @@ if [ ! -d "$OPENTUI_REPO/.git" ]; then
     git clone --depth 1 --branch "$OPENTUI_TAG" https://github.com/anomalyco/opentui "$OPENTUI_REPO"
 fi
 SOURCE_SHA="$(git -C "$OPENTUI_REPO" rev-parse HEAD)"
-MARKER="opentui=${SOURCE_SHA} zig=${ZIG_VERSION} patch=${PATCH_SHA} dl=${DL_SHA}"
+MARKER="opentui=${SOURCE_SHA} zig=${ZIG_VERSION} patch=${PATCH_SHA} dl=${DL_SHA} script=${SCRIPT_SHA}"
 
 ZIG_BIN="$OUT/zig-$ZIG_VERSION/zig"
 if [ ! -x "$ZIG_BIN" ]; then
@@ -62,9 +63,19 @@ fi
 docker cp "$BUN_CONTAINER:/opt/opentui/lib/x86_64-linux-musl/libopentui.a" "$OPENTUI_OUT/libopentui.a"
 docker cp "$BUN_CONTAINER:/opt/opentui/lib/x86_64-linux-musl/libyoga_cxx.a" "$OPENTUI_OUT/libyoga_cxx.a"
 
-nm "$OPENTUI_OUT/libopentui.a" 2>/dev/null | awk '$2 ~ /^[TDBRW]$/ {print "--undefined=" $3}' \
-    | sort -u > "$OPENTUI_OUT/undefined.rsp"
+awk '/^export fn [[:alpha:]_][[:alnum:]_]*\(/ {
+    sub(/^export fn /, "")
+    sub(/\(.*/, "")
+    print "--undefined=" $0
+}' "$OPENTUI_REPO/packages/native/src/lib.zig" | sort -u > "$OPENTUI_OUT/undefined.rsp"
 test -s "$OPENTUI_OUT/undefined.rsp"
+if comm -23 \
+    <(sed 's/^--undefined=//' "$OPENTUI_OUT/undefined.rsp") \
+    <(nm -g --defined-only "$OPENTUI_OUT/libopentui.a" 2>/dev/null | awk '$2 ~ /^[TDBRW]$/ {print $3}' | sort -u) \
+    | grep .; then
+    err "OpenTUI FFI export missing from static archive"
+    exit 1
+fi
 for sym in setLogCallback createEventSink destroyEventSink createNativeRenderable \
            destroyNativeRenderable createRenderer destroyRenderer setTerminalEnvVar \
            setUseThread setClearOnShutdown setBackgroundColor render; do
