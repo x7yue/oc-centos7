@@ -52,4 +52,9 @@ RUN set -eux; \
 # static libstdc++ must exist in the sysroot for -static
 RUN test -f /opt/linux-sysroot-musl/usr/lib/libstdc++.a && echo "libstdc++.a OK"
 
+# Bun 1.4.x invokes nasm while building its native dependencies.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nasm \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /src
