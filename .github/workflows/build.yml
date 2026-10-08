@@ -180,6 +180,9 @@ jobs:
           cd oc
           ./scripts/build-opencode.sh
 
+      - name: Make dependency caches readable by runner
+        run: sudo chown -R "$(id -u):$(id -g)" oc/output/cache
+
       - name: Package artifacts
         run: |
           cd oc

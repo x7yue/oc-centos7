@@ -41,7 +41,7 @@ log "OpenCode v2 CLI"
 OCV="$(docker exec "$C7_CONTAINER" /opt/dist/opencode2 --version)"
 printf 'opencode2 --version: %s\n' "$OCV"
 if [ -n "${OC_VERSION:-}" ]; then
-    test "$OCV" = "$OC_VERSION" || { err "OpenCode version mismatch: $OCV"; exit 1; }
+    test "$OCV" = "opencode2 v$OC_VERSION" || { err "OpenCode version mismatch: $OCV"; exit 1; }
 fi
 docker exec "$C7_CONTAINER" /opt/dist/opencode2 --help > "$OUT/logs/opencode-help.log"
 grep -q 'serve' "$OUT/logs/opencode-help.log"
