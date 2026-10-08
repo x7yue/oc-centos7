@@ -21,7 +21,7 @@ PR 会自动运行 `build` 工作流并通过 CentOS 7 验证；PR 构建不会�
 3. 上传 `opencode2-linux-x64-musl`、`bun-linux-x64-musl-static`、校验和与版本身份文件。
 4. 在独立的 CentOS 7 job 中核对校验和、Bun/FFI、`opencode2` CLI、TUI 存活以及 Web UI HTTP 响应。**仅手动发行且验证成功才创建 Release**。
 
-`skip_verify=true` 只用于取得构建产物：验证 job 和 Release 都会跳过。Release tag 默认由 OpenCode ref、Bun/OpenTUI 提交和补丁哈希组成；同名 tag 已存在时工作流会提前失败。正式发行要求仓库启用 immutable releases，先将全部附件上传到草稿，再发布并核对 tag 指向和不可变状态。
+`skip_verify=true` 只用于取得构建产物：验证 job 和 Release 都会跳过。Release tag 默认由 OpenCode ref、Bun/OpenTUI 提交和补丁哈希组成；同名 tag 已存在时工作流会提前失败。仓库须启用 immutable releases；发行先将全部附件上传到草稿，再发布并核对 tag 指向和不可变状态。Actions 默认 token 无法读取该管理设置，因此不可变状态在发布后校验。
 
 验证分支可使用 `skip_release=true`：完整执行 CentOS 7 验证，但不创建 Release。
 
