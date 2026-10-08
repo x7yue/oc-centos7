@@ -93,8 +93,13 @@ mkdir -p "$OUT/logs"
 log "building (profile=release, linux x64 musl)..."
 if ! docker exec -e CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}" -e BUN_BUILD_JOBS="${BUN_BUILD_JOBS:-2}" "$BUN_CONTAINER" bash -c \
     'bun ./scripts/build.ts --profile=release --os=linux --arch=x64 --abi=musl \
-       --build-dir=build/release-musl-static -j${BUN_BUILD_JOBS:-2}' 2>&1 | tee "$OUT/logs/bun-build.log"; then
-    err "build failed — tail:"; tail -50 "$OUT/logs/bun-build.log"; exit 1
+       --build-dir=build/release-musl-static -j${BUN_BUILD_JOBS:-2}' \
+    >"$OUT/logs/bun-build.log" 2>&1; then
+    err "build failed; diagnostics from $OUT/logs/bun-build.log:"
+    grep -Ei '(^|[^a-z])(error|undefined symbol|duplicate symbol|nasm not found|failed)([^a-z]|$)' \
+        "$OUT/logs/bun-build.log" | tail -30 || true
+    tail -30 "$OUT/logs/bun-build.log"
+    exit 1
 fi
 log "build OK (log: $OUT/logs/bun-build.log)"
 

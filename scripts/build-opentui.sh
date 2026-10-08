@@ -69,6 +69,10 @@ awk '/^export fn [[:alpha:]_][[:alnum:]_]*\(/ {
     print "--undefined=" $0
 }' "$OPENTUI_REPO/packages/native/src/lib.zig" | sort -u > "$OPENTUI_OUT/undefined.rsp"
 test -s "$OPENTUI_OUT/undefined.rsp"
+if grep -Eq '^--undefined=(WebP|VP8)' "$OPENTUI_OUT/undefined.rsp"; then
+    err "OpenTUI forced exports include WebP symbols already provided by Bun"
+    exit 1
+fi
 if comm -23 \
     <(sed 's/^--undefined=//' "$OPENTUI_OUT/undefined.rsp") \
     <(nm -g --defined-only "$OPENTUI_OUT/libopentui.a" 2>/dev/null | awk '$2 ~ /^[TDBRW]$/ {print $3}' | sort -u) \
