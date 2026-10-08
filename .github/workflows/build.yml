@@ -111,10 +111,6 @@ jobs:
           build_hash="$(printf '%s' "$build_id" | sha256sum | cut -c1-16)"
           source_sha="$(git rev-parse HEAD)"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$SKIP_VERIFY" != true ] && [ "$SKIP_RELEASE" != true ]; then
-            gh api "repos/$GITHUB_REPOSITORY/immutable-releases" >/dev/null || {
-              echo 'Enable immutable releases before starting a release build' >&2
-              exit 1
-            }
             if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
               echo "Tag $tag already exists; choose a new tag for a new build" >&2
               exit 1
