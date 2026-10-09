@@ -96,10 +96,11 @@ docker exec "$C7_CONTAINER" /opt/dist/bun -e '
   const compressed = await fetch(url, { headers: { "accept-encoding": "br" } });
   const plainSize = (await plain.arrayBuffer()).byteLength;
   const compressedSize = (await compressed.arrayBuffer()).byteLength;
-  if (!plain.ok || plain.headers.has("content-encoding") || !plainSize)
-    throw new Error(`Uncompressed web asset failed: status=${plain.status} encoding=${plain.headers.get("content-encoding")} bytes=${plainSize}`);
+  const variesByEncoding = (response) => response.headers.get("vary")?.split(",").some((part) => part.trim().toLowerCase() === "accept-encoding");
+  if (!plain.ok || plain.headers.has("content-encoding") || !variesByEncoding(plain) || !plainSize)
+    throw new Error(`Uncompressed web asset failed: status=${plain.status} encoding=${plain.headers.get("content-encoding")} vary=${plain.headers.get("vary")} bytes=${plainSize}`);
   if (!compressed.ok || compressed.headers.get("content-encoding") !== "br" ||
-      compressed.headers.get("vary") !== "accept-encoding" || !compressedSize)
+      !variesByEncoding(compressed) || !compressedSize)
     throw new Error(`Brotli web asset failed: status=${compressed.status} encoding=${compressed.headers.get("content-encoding")} vary=${compressed.headers.get("vary")} bytes=${compressedSize}`);
   console.log(`Web asset served with identity and Brotli: ${url.pathname}`);
 '

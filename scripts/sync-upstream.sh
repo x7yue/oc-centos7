@@ -100,7 +100,8 @@ preflight_patches bun "$BUN_REPO" \
     "$ROOT/patches/bun-flags-dlopen.patch"
 preflight_patches opencode "$OPENCODE_REPO" \
     "$ROOT/patches/opencode-prebuilt-web-ui.patch" \
-    "$ROOT/patches/opencode-cli-name.patch"
+    "$ROOT/patches/opencode-cli-name.patch" \
+    "$ROOT/patches/opencode-web-ui-vary.patch"
 preflight_patches opentui "$OPENTUI_REPO" \
     "$ROOT/patches/opentui-static-lib.patch"
 

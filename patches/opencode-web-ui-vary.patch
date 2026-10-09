@@ -1,0 +1,22 @@
+diff --git a/packages/server/src/process.ts b/packages/server/src/process.ts
+--- a/packages/server/src/process.ts
++++ b/packages/server/src/process.ts
+@@ -65,13 +65,11 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
+   const urls = () => [...localURLs(), ...(remoteURLs?.() ?? [])]
+   const application = yield* Ref.make(Option.none<App>())
+   const app = dispatch(password, status, application, options.app?.version ?? "unknown", urls, Global.Path.tmp)
++  const httpApp = app.pipe(
++    HttpMiddleware.compression(),
++    HttpMiddleware.cors({ allowedOrigins: (origin) => isAllowedCorsOrigin(origin, options), maxAge: 86_400 }),
++  )
+   // Request fibers may continue inbound trace context, but must not inherit the server startup parent.
+   yield* bound.http
+-    .serve(
+-      (transform ? transform(app) : app).pipe(
+-        HttpMiddleware.compression(),
+-        HttpMiddleware.cors({ allowedOrigins: (origin) => isAllowedCorsOrigin(origin, options), maxAge: 86_400 }),
+-      ),
+-      errorResponseLogger,
+-    )
++    .serve(transform ? transform(httpApp) : httpApp, errorResponseLogger)
+     .pipe(Effect.provide(NodeHttpServer.layerHttpServices), withoutParentSpan)
