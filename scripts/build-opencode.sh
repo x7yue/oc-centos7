@@ -30,6 +30,7 @@ fi
 
 apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-prebuilt-web-ui.patch" 'OPENCODE_PREBUILT_WEB_UI'
 apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-cli-name.patch" "OPENCODE_CLI_NAME: \"'opencode2'\""
+apply_patch "$OPENCODE_REPO" "$ROOT/patches/opencode-web-ui-vary.patch" 'const httpApp = app.pipe('
 
 # --- alpine container up ---
 ensure_running "$ALPINE_CONTAINER" "$ALPINE_IMAGE" \

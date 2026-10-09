@@ -6,9 +6,9 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 printf 'OpenCode %120s\n' '' > "$tmp/tui.log"
 
-opencode_version_matches 'opencode2 v2.0.24' '2.0.24'
-! opencode_version_matches '2.0.24' '2.0.24'
-! opencode_version_matches 'opencode2 v2.0.23' '2.0.24'
+opencode_version_matches 'opencode2 v2.0.26' '2.0.26'
+! opencode_version_matches '2.0.26' '2.0.26'
+! opencode_version_matches 'opencode2 v2.0.25' '2.0.26'
 
 tui_smoke_valid 0 "$tmp/tui.log"
 tui_smoke_valid 124 "$tmp/tui.log"

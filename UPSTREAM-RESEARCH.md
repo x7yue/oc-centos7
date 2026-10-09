@@ -1,8 +1,26 @@
-# Upstream build notes (2026-10-08)
+# Upstream build notes (2026-10-09)
 
-This repository builds standalone Bun and OpenCode v2 binaries for CentOS 7. The facts below are pinned to upstream tags; compatibility conclusions are identified separately from upstream behavior. No local build was run for this research.
+This repository builds standalone Bun and OpenCode v2 binaries for CentOS 7. The facts below are pinned to upstream tags; compatibility conclusions are identified separately from upstream behavior. Source and patch preflight were checked locally; the full CentOS 7 build remains a GitHub Actions gate.
 
-## Version pins
+## Current v2.0.26 upgrade
+
+| Component | Pin | Resolved commit | Primary evidence |
+| --- | --- | --- | --- |
+| Bun | `bun-v1.4.2` | `744846f844374847c902b5e7fd59b4342a51ef99` | [tag ref](https://github.com/oven-sh/bun/tree/bun-v1.4.2) |
+| OpenCode | `v2.0.26` / npm `@opencode/cli@2.0.26` | `9b4ec5714d481559990db0a816d5dec19541a814` | [tag ref](https://github.com/anomalyco/opencode/tree/v2.0.26), [CLI package](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/cli/package.json) |
+| OpenTUI | `v0.5.17` | `6f0efd3330978d696b42db3d7d95d2042008312b` (annotated tag target) | [tag ref](https://github.com/anomalyco/opentui/tree/v0.5.17), [native build](https://github.com/anomalyco/opentui/blob/v0.5.17/packages/native/build.zig) |
+
+OpenCode's root package still specifies `bun@1.4.2` and now catalogs `@opentui/core`, `@opentui/keymap`, and `@opentui/solid` at `0.5.17`. OpenTUI still requires Zig `0.16.0`. [OpenCode root package](https://github.com/anomalyco/opencode/blob/v2.0.26/package.json), [OpenTUI native build](https://github.com/anomalyco/opentui/blob/v0.5.17/packages/native/build.zig)
+
+The v2.0.26 CLI build archives the Web UI as raw bytes through `AppArchive.encode`, compresses its entries with Brotli, and embeds the archive as a file. The Web UI serves compressed assets when the client accepts Brotli; HTML is served decoded. The downstream prebuilt-UI patch only skips a duplicate `bun run build` and still archives the previously built `packages/app/dist`. `OPENCODE_CLI_NAME` remains `opencode` upstream, so the `opencode2` patch is still required. The first CentOS 7 run found that server CORS middleware replaced the asset response's `Vary: accept-encoding` with `Vary: Origin`; the third OpenCode patch moves the existing API middleware inside the Web UI transform so both asset representations retain their cache key. All three OpenCode patches and the unchanged OpenTUI static-library patch apply to the target tag sources. [CLI build](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/cli/script/build.ts), [app archive](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/cli/script/app-assets.ts), [Web UI handler](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/cli/src/services/web-ui.ts), [server process](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/server/src/process.ts)
+
+The static-musl binary, native FFI, plugin runtime, and HTTP asset delivery require the CentOS 7 Actions build and runtime checks before release. Patch applicability alone does not establish runtime compatibility.
+
+## Prior v2.0.24 baseline (2026-10-08)
+
+The following sections document the previous pin and remain as historical design context.
+
+### Version pins
 
 | Component | Pin | Resolved commit | Primary evidence |
 | --- | --- | --- | --- |
@@ -14,7 +32,7 @@ The OpenCode root declares `bun@1.4.2` and catalogs `@opentui/core`, `@opentui/k
 
 Bun `bun-v1.4.2` pins Rust `nightly-2026-07-20` in `rust-toolchain.toml`. The repository's current Docker Rust pin and `bun@1.4.2` host-builder pins therefore match the two upstream projects. [Bun toolchain](https://github.com/oven-sh/bun/blob/bun-v1.4.2/rust-toolchain.toml), [OpenCode root package](https://github.com/anomalyco/opencode/blob/v2.0.24/package.json)
 
-## Upstream build and packaging contracts
+### Upstream build and packaging contracts
 
 - Bun's x64 build defaults to `baseline=true`, and its x64 compiler flag is `-march=nehalem` (no AVX requirement). The Bun release pipeline publishes legacy `-baseline` names as aliases to the same x64 build. Its current build entry accepts `--os=linux --arch=x64 --abi=musl`; this repository's additional full-static and symbol-interposition changes remain downstream CentOS 7 adaptations. [Bun config](https://github.com/oven-sh/bun/blob/bun-v1.4.2/scripts/build/config.ts), [CPU flags](https://github.com/oven-sh/bun/blob/bun-v1.4.2/scripts/build/flags.ts), [release triplet](https://github.com/oven-sh/bun/blob/bun-v1.4.2/scripts/build/ci.ts), [build entry](https://github.com/oven-sh/bun/blob/bun-v1.4.2/scripts/build.ts)
 - OpenCode's CLI build script accepts `--target=opencode-linux-x64-musl`, `--target=opencode-linux-x64-baseline-musl`, `--skip-install`, and `--skip-web-ui`. It compiles `src/index.ts` through `Bun.build` and writes `dist/cli-linux-x64-musl/bin/opencode` for the first target. `BUN_COMPILE_RELEASE`, when set, selects a downloaded Bun runtime; with no release override, the invoking Bun is used for the default target. [OpenCode CLI build](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/cli/script/build.ts), [Bun compile target handling](https://github.com/oven-sh/bun/blob/bun-v1.4.2/src/options_types/compile_target.rs)
@@ -23,7 +41,7 @@ Bun `bun-v1.4.2` pins Rust `nightly-2026-07-20` in `rust-toolchain.toml`. The re
 - The v2 command is `serve`, described upstream as "Start the v2 API and web server"; there is no separate `web` command in its command specification. `serve` installs `WebUi.handler`, which returns embedded `index.html` for `GET /` (or 404 when it is missing), before API authentication. `OPENCODE_VERSION` is taken verbatim from the build environment by `@opencode/script` before its registry/version-bump fallback. CI should set this variable and check both `opencode2 --version` and an HTTP `GET /` containing the web shell. [command specification](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/cli/src/commands/commands.ts), [server process](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/cli/src/server-process.ts), [Web UI handler](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/cli/src/services/web-ui.ts), [version script](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/script/src/index.ts)
 - OpenTUI's native source/build has moved to `packages/native`. Its Zig manifest requires `0.16.0`, and `scripts/prepare-zig-deps.sh` extracts the vendored dependency archive before building. Upstream offers `-Dlibrary-target=x86_64-linux-musl` but builds a shared library by default; a static `libopentui.a` and separately linked C++ Yoga archive are downstream changes for the static Bun link. [Zig manifest](https://github.com/anomalyco/opentui/blob/v0.5.14/packages/native/build.zig.zon), [dependency preparation](https://github.com/anomalyco/opentui/blob/v0.5.14/packages/native/scripts/prepare-zig-deps.sh), [native build](https://github.com/anomalyco/opentui/blob/v0.5.14/packages/native/build.zig)
 
-## Compatibility decision and CI checks
+### Compatibility decision and CI checks
 
 Build one `opencode-linux-x64-musl` target with the adapted Bun v1.4.2 runtime. Because that Bun runtime is already x64 baseline, a separate AVX2/baseline build does not buy a broader CPU floor for this repository's standalone artifact. Explicitly choosing `opencode-linux-x64-baseline-musl` would make Bun's compile target `baseline=true` while the invoking Bun reports the default target as `baseline=false`; without an explicit `executablePath`, Bun may fetch an unadapted release runtime. This is an inference from the two pinned build implementations and must be checked by CI through `file`, dynamic-dependency inspection, and execution on CentOS 7. [Bun config](https://github.com/oven-sh/bun/blob/bun-v1.4.2/scripts/build/config.ts), [Bun compile target](https://github.com/oven-sh/bun/blob/bun-v1.4.2/src/options_types/compile_target.rs), [OpenCode CLI build](https://github.com/anomalyco/opencode/blob/v2.0.24/packages/cli/script/build.ts)
 

@@ -86,4 +86,22 @@ if [ "$ready" -ne 1 ]; then
     docker exec "$C7_CONTAINER" sh -c 'tail -80 /tmp/opencode-serve.log' || true
     exit 1
 fi
+docker exec "$C7_CONTAINER" /opt/dist/bun -e '
+  const origin = "http://127.0.0.1:4096";
+  const html = await (await fetch(origin)).text();
+  const asset = html.match(/(?:src|href)="([^"]*\/_assets\/[^"]+\.(?:js|css))"/)?.[1];
+  if (!asset) throw new Error("No bundled JavaScript or CSS asset in the web shell");
+  const url = new URL(asset, origin);
+  const plain = await fetch(url, { headers: { "accept-encoding": "identity" } });
+  const compressed = await fetch(url, { headers: { "accept-encoding": "br" } });
+  const plainSize = (await plain.arrayBuffer()).byteLength;
+  const compressedSize = (await compressed.arrayBuffer()).byteLength;
+  const variesByEncoding = (response) => response.headers.get("vary")?.split(",").some((part) => part.trim().toLowerCase() === "accept-encoding");
+  if (!plain.ok || plain.headers.has("content-encoding") || !variesByEncoding(plain) || !plainSize)
+    throw new Error(`Uncompressed web asset failed: status=${plain.status} encoding=${plain.headers.get("content-encoding")} vary=${plain.headers.get("vary")} bytes=${plainSize}`);
+  if (!compressed.ok || compressed.headers.get("content-encoding") !== "br" ||
+      !variesByEncoding(compressed) || !compressedSize)
+    throw new Error(`Brotli web asset failed: status=${compressed.status} encoding=${compressed.headers.get("content-encoding")} vary=${compressed.headers.get("vary")} bytes=${compressedSize}`);
+  console.log(`Web asset served with identity and Brotli: ${url.pathname}`);
+'
 log "CentOS 7 checks passed"
