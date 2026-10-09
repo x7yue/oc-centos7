@@ -7,8 +7,8 @@
 | 上游 | 固定 tag | 用途 |
 | --- | --- | --- |
 | Bun | `bun-v1.4.2` | 编译静态 musl 运行时及 OpenCode CLI |
-| OpenCode | `v2.0.24` | `@opencode/cli`，`opencode2` 命令 |
-| OpenTUI | `v0.5.14` | 匹配 OpenCode v2 依赖的原生 TUI ABI |
+| OpenCode | `v2.0.26` | `@opencode/cli`，`opencode2` 命令 |
+| OpenTUI | `v0.5.17` | 匹配 OpenCode v2 依赖的原生 TUI ABI |
 
 具体 pin 在 [`versions.json`](versions.json)。升级依据、上游源码链接与兼容性边界见 [`UPSTREAM-RESEARCH.md`](UPSTREAM-RESEARCH.md)，构建机制见 [`PLAN.md`](PLAN.md)。
 

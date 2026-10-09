@@ -1,8 +1,8 @@
 diff --git a/packages/cli/script/app-assets.ts b/packages/cli/script/app-assets.ts
 --- a/packages/cli/script/app-assets.ts
 +++ b/packages/cli/script/app-assets.ts
-@@ -7,6 +7,7 @@ export async function buildAppArchive(channel: string, options?: { skipBuild?: boolean }) {
-   if (options?.skipBuild) return "{}"
+@@ -8,7 +8,8 @@ export async function buildAppArchive(channel: string, options?: { skipBuild?: boolean }) {
+   if (options?.skipBuild) return AppArchive.encode([])
    const root = path.resolve(import.meta.dirname, "../../app")
 -  await $`bun run build`
 -    .cwd(root)
@@ -11,4 +11,5 @@ diff --git a/packages/cli/script/app-assets.ts b/packages/cli/script/app-assets.
 +    await $`bun run build`
 +      .cwd(root)
 +      .env({ ...process.env, OPENCODE_CHANNEL: channel, VITE_OPENCODE_SERVER_MODE: "origin" })
-   return JSON.stringify(
+   return AppArchive.encode(
+     await Promise.all(

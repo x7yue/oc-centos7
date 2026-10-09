@@ -86,4 +86,19 @@ if [ "$ready" -ne 1 ]; then
     docker exec "$C7_CONTAINER" sh -c 'tail -80 /tmp/opencode-serve.log' || true
     exit 1
 fi
+docker exec "$C7_CONTAINER" /opt/dist/bun -e '
+  const origin = "http://127.0.0.1:4096";
+  const html = await (await fetch(origin)).text();
+  const asset = html.match(/(?:src|href)="([^"]*\/_assets\/[^"]+\.(?:js|css))"/)?.[1];
+  if (!asset) throw new Error("No bundled JavaScript or CSS asset in the web shell");
+  const url = new URL(asset, origin);
+  const plain = await fetch(url, { headers: { "accept-encoding": "identity" } });
+  const compressed = await fetch(url, { headers: { "accept-encoding": "br" } });
+  if (!plain.ok || plain.headers.has("content-encoding") || !(await plain.arrayBuffer()).byteLength)
+    throw new Error("Uncompressed web asset failed");
+  if (!compressed.ok || compressed.headers.get("content-encoding") !== "br" ||
+      compressed.headers.get("vary") !== "accept-encoding" || !(await compressed.arrayBuffer()).byteLength)
+    throw new Error("Brotli web asset failed");
+  console.log(`Web asset served with identity and Brotli: ${url.pathname}`);
+'
 log "CentOS 7 checks passed"

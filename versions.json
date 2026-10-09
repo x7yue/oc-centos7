@@ -4,11 +4,11 @@
     "kind": "tag"
   },
   "opencode": {
-    "ref": "v2.0.24",
+    "ref": "v2.0.26",
     "kind": "tag"
   },
   "opentui": {
-    "ref": "v0.5.14",
+    "ref": "v0.5.17",
     "kind": "tag"
   }
 }
