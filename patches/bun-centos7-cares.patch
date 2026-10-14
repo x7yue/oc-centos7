@@ -1,0 +1,12 @@
+--- a/scripts/build/deps/cares.ts
++++ b/scripts/build/deps/cares.ts
+@@ -179,6 +179,7 @@
+ // prettier-ignore
+ const LINUX = def1([
+-  "HAVE_MALLOC_H", "HAVE_SYS_EPOLL_H", "HAVE_SYS_RANDOM_H",
+-  "HAVE_EPOLL", "HAVE_GETRANDOM",
++  // CentOS 7 has neither sys/random.h nor glibc getrandom.
++  // c-ares already defines CARES_RANDOM_FILE as /dev/urandom below.
++  "HAVE_MALLOC_H", "HAVE_SYS_EPOLL_H", "HAVE_EPOLL",
+   "HAVE_MSG_NOSIGNAL", "HAVE_PIPE2",
+ ]);

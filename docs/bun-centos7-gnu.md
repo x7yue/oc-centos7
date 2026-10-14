@@ -11,7 +11,9 @@ of WebKit. LLVM 21 runs natively in a manylinux2014 CentOS 7 userland. GCC 13
 headers and static C++ support libraries are imported separately; libc, its
 headers, and the ELF interpreter remain CentOS 7's system glibc 2.17.
 
-The separate header patch accommodates old system headers. Baseline, patched,
+The separate header patch accommodates old system headers. The c-ares build
+configuration uses its existing `/dev/urandom` implementation instead of
+assuming newer glibc random APIs and headers. Baseline, patched,
 and rolled-back compiler invocations and source hashes are included in the
 artifact. No static musl, OpenTUI, OpenCode, or fake `dlopen` patches are applied.
 

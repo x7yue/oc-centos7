@@ -82,6 +82,9 @@ cmp /out/evidence/ORIGINAL_FILE /tmp/rollback-source.cpp
 grep -q 'sys/random.h.*file not found' /out/evidence/ROLLBACK.log
 printf 'ROLLBACK_RESULT: original bytes and baseline compiler failure restored; source remains patched\n' >> /out/evidence/VERIFICATION.txt
 cat /out/evidence/VERIFICATION.txt
+git apply --check /repo/patches/bun-centos7-cares.patch
+git apply /repo/patches/bun-centos7-cares.patch
+git diff > /out/evidence/all-source-changes.patch
 
 # Upstream release profile uses its pinned WebKit archive and disables LTO.
 # Do not apply the musl/static OpenTUI or dlopen shim patches.

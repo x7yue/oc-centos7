@@ -9,7 +9,7 @@ on:
       - docker/Dockerfile.buncentos7
       - scripts/bun-centos7/**
       - tests/bun-centos7/**
-      - patches/bun-centos7-headers.patch
+      - patches/bun-centos7-*.patch
 
 permissions:
   contents: read
