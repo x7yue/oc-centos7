@@ -16,6 +16,8 @@ configuration uses its existing `/dev/urandom` implementation instead of
 assuming newer glibc random APIs and headers. Baseline, patched,
 and rolled-back compiler invocations and source hashes are included in the
 artifact. No static musl, OpenTUI, OpenCode, or fake `dlopen` patches are applied.
+The syscall patch supplies the x86-64 `preadv2`/`pwritev2` numbers and
+`RWF_NOWAIT` flag missing from the old Linux headers, preserving upstream calls.
 
 Acceptance criteria:
 

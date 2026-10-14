@@ -1,0 +1,22 @@
+--- a/src/jsc/bindings/c-bindings.cpp
++++ b/src/jsc/bindings/c-bindings.cpp
+@@ -536,6 +536,19 @@
+ #if OS(LINUX)
+
+ #include <linux/fs.h>
++
++// Linux UAPI constants absent from CentOS 7 headers. Keep raw syscall behavior.
++#if defined(__x86_64__)
++#ifndef SYS_preadv2
++#define SYS_preadv2 327
++#endif
++#ifndef __NR_pwritev2
++#define __NR_pwritev2 328
++#endif
++#endif
++#ifndef RWF_NOWAIT
++#define RWF_NOWAIT 0x00000008
++#endif
+
+ static inline void make_pos_h_l(unsigned long* pos_h, unsigned long* pos_l,
+     off_t offset)

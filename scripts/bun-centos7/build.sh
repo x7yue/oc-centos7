@@ -87,6 +87,8 @@ printf 'ROLLBACK_RESULT: original bytes and baseline compiler failure restored; 
 cat /out/evidence/VERIFICATION.txt
 git apply --check /repo/patches/bun-centos7-cares.patch
 git apply /repo/patches/bun-centos7-cares.patch
+git apply --check /repo/patches/bun-centos7-syscalls.patch
+git apply /repo/patches/bun-centos7-syscalls.patch
 git diff > /out/evidence/all-source-changes.patch
 
 # Upstream release profile uses its pinned WebKit archive and disables LTO.
