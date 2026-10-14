@@ -13,7 +13,7 @@ grep 'CentOS Linux release 7' /etc/centos-release
 test "$(git rev-parse HEAD)" = 744846f844374847c902b5e7fd59b4342a51ef99
 # Fresh checkouts of this exact pin must not invalidate every cached object.
 source_epoch=$(git log -1 --format=%ct)
-git ls-files -z | xargs -0 touch -d "@$source_epoch"
+git ls-files -z | xargs -0 touch -h -d "@$source_epoch"
 {
   cat /etc/centos-release
   getconf GNU_LIBC_VERSION

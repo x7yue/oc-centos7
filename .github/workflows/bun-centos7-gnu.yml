@@ -38,7 +38,7 @@ jobs:
           python3 -m py_compile repo/scripts/bun-centos7/*.py
           test "$(jq -r .bun.ref repo/versions.json)" = bun-v1.4.2
           sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet
-          mkdir -p cache/build artifacts/evidence
+          mkdir -p cache/build artifacts/evidence bun/vendor
           git -C repo rev-parse HEAD > artifacts/evidence/repository-commit.txt
           git -C bun rev-parse HEAD > artifacts/evidence/bun-commit.txt
           df -h .
