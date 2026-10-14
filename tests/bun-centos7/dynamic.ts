@@ -11,7 +11,9 @@ const lib = dlopen(join(dir, "libexternal.so"), {
 assert.equal(lib.symbols.centos7_external_add(19, 23), 42);
 lib.close();
 console.log("FFI_EXTERNAL_SO=42");
-assert.throws(() => dlopen(join(dir, "missing.so"), {}));
+assert.throws(() => dlopen(join(dir, "missing.so"), {
+  centos7_external_add: { args: [FFIType.i32, FFIType.i32], returns: FFIType.i32 },
+}));
 console.log("FFI_MISSING_SO=REJECTED");
 const require = createRequire(import.meta.url);
 const addon = require(join(dir, "external.node"));

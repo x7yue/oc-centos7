@@ -13,18 +13,18 @@ import zstandard
 root = pathlib.Path('/opt/gcc13')
 root.mkdir(parents=True, exist_ok=True)
 records = []
-for name in ('libgcc-devel_linux-64', 'libstdcxx-devel_linux-64'):
-    url = f'https://api.anaconda.org/release/conda-forge/{name}/13.4.0'
-    with urllib.request.urlopen(url, timeout=120) as response:
-        metadata = json.load(response)
-    candidates = [d for d in metadata['distributions']
-                  if d['attrs']['subdir'] in ('noarch', 'linux-64')]
-    package = max(candidates, key=lambda d: (d['attrs'].get('build_number', 0), d['basename']))
-    url = 'https://conda.anaconda.org/conda-forge/' + package['basename']
+packages = (
+    ('libgcc-devel_linux-64-13.4.0-hd1d28cc_120.conda',
+     '46f98e05c26957fffbc9224e70fc16218e5bc3d432288b6baf7e89619d517030'),
+    ('libstdcxx-devel_linux-64-13.4.0-h6963c3b_120.conda',
+     'c322903ff3c6330ad9a9da72b2b86503595fc072a7d90405021491168c21701c'),
+)
+for filename, expected_hash in packages:
+    url = 'https://conda.anaconda.org/conda-forge/noarch/' + filename
     with urllib.request.urlopen(url, timeout=120) as response:
         data = response.read()
     digest = hashlib.sha256(data).hexdigest()
-    assert digest == package['sha256'], (url, digest)
+    assert digest == expected_hash, (url, digest)
     records.append({'url': url, 'sha256': digest, 'version': '13.4.0'})
     if url.endswith('.conda'):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

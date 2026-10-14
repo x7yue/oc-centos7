@@ -1,6 +1,6 @@
 --- a/src/jsc/bindings/workaround-missing-symbols.cpp
 +++ b/src/jsc/bindings/workaround-missing-symbols.cpp
-@@ -79,8 +79,26 @@
+@@ -79,7 +79,25 @@
  #include <stdio.h>
  #include <signal.h>
  #include <stdlib.h>
@@ -26,4 +26,3 @@
 +#endif
  #include <unistd.h>
  #include <dlfcn.h>
- 

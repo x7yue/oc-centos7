@@ -7,12 +7,16 @@ ENV PATH=/opt/llvm21/bin:/usr/local/cargo/bin:/usr/local/go/bin:/opt/python/cp31
     BUN_TOOLCHAIN_LLVM=/opt/llvm21
 RUN test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.17' \
     && grep -q 'CentOS Linux release 7' /etc/centos-release \
-    && yum install -y ruby nasm && yum clean all
+    && yum install -y ruby && yum clean all
 # Import only GCC 13 headers/static runtime, never a replacement libc/sysroot.
 COPY scripts/bun-centos7/install-cxx.py /tmp/install-cxx.py
-RUN python -m pip install --no-cache-dir zstandard==0.25.0 \
+RUN python -m pip install --no-cache-dir zstandard==0.25.0 ninja==1.13.0 \
     && python /tmp/install-cxx.py \
     && rm /tmp/install-cxx.py
+RUN curl -fsSL --retry 5 https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/nasm-2.16.03.tar.xz -o /tmp/nasm.tar.xz \
+    && tar -xJf /tmp/nasm.tar.xz -C /tmp \
+    && cd /tmp/nasm-2.16.03 && ./configure --prefix=/usr/local \
+    && make -j2 && make install && rm -rf /tmp/nasm-2.16.03 /tmp/nasm.tar.xz
 RUN curl -fsSL --retry 5 https://go.dev/dl/go1.24.6.linux-amd64.tar.gz | tar -xz -C /usr/local \
     && curl -fsSL --retry 5 https://sh.rustup.rs -o /tmp/rustup.sh \
     && sh /tmp/rustup.sh -y --default-toolchain nightly-2026-07-20 --profile minimal \
