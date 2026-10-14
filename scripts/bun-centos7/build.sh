@@ -8,6 +8,13 @@ export CARGO_BUILD_JOBS=2
 export CC=clang CXX=clang++
 export BUN_TOOLCHAIN_LLVM=/opt/llvm21
 
+# GCC 13 supplies the C++ runtime, while manylinux's native GCC 10 supplies
+# libatomic. Make that existing static archive visible in clang's GCC search path.
+atomic_archive=$(/opt/rh/devtoolset-10/root/usr/bin/gcc -print-file-name=libatomic.a)
+test -f "$atomic_archive"
+ln -sf "$atomic_archive" /opt/gcc13/lib/gcc/x86_64-conda-linux-gnu/13.4.0/libatomic.a
+sha256sum "$atomic_archive" > /out/evidence/libatomic.sha256
+
 test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.17'
 grep 'CentOS Linux release 7' /etc/centos-release
 test "$(git rev-parse HEAD)" = 744846f844374847c902b5e7fd59b4342a51ef99

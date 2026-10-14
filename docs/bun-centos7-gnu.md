@@ -10,6 +10,8 @@ and retains the upstream pinned prebuilt WebKit archive. This is not a rebuild
 of WebKit. LLVM 21 runs natively in a manylinux2014 CentOS 7 userland. GCC 13
 headers and static C++ support libraries are imported separately; libc, its
 headers, and the ELF interpreter remain CentOS 7's system glibc 2.17.
+The image's existing GCC 10 static `libatomic.a` is exposed to clang's library
+search path; its checksum is recorded with the build evidence.
 
 The separate header patch accommodates old system headers. The c-ares build
 configuration uses its existing `/dev/urandom` implementation instead of
