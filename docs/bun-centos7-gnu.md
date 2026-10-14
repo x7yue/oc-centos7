@@ -47,3 +47,42 @@ gh workflow run bun-centos7-gnu.yml --ref verify/bun-centos7-glibc217
 
 Results live in the build and runtime artifacts of each Actions run. The current
 musl release workflow is independent of this experiment.
+
+## Observed result — 2026-10-14
+
+[Actions run 38504121086](https://github.com/x7yue/oc-centos7/actions/runs/38504121086)
+passed both `build` and `verify` on experiment commit
+`4a19f61eca91b3116f76d2bca59758c660e82244`. All compilation and runtime tests
+ran in Actions. The resulting Bun reports version `1.4.2`.
+
+The ELF audit reports `GLIBC_MAX=(2, 17)`, interpreter
+`/lib64/ld-linux-x86-64.so.2`, and `SYSTEM_DLOPEN=PASS`. Dynamic dependencies are
+`libc.so.6`, `ld-linux-x86-64.so.2`, `libpthread.so.0`, `libdl.so.2`, and `libm.so.6`.
+
+The separate runtime job used a clean CentOS 7.9.2009 image
+`quay.io/centos/centos@sha256:e4ca2ed0202e76be184e75fb26d14bf974193579039d5573fb2348664deef76e`,
+system glibc 2.17, and the runner's `6.17.0-1022-azure` kernel. Its output includes:
+
+```text
+JS_SMOKE=PASS
+FFI_EXTERNAL_SO=42
+FFI_MISSING_SO=REJECTED
+NAPI_EXTERNAL_NODE=42
+DYNAMIC_LOADING=PASS
+CLEAN_CENTOS7_GLIBC217=PASS
+```
+
+The header compiler comparison also passed its assertions: baseline exits 1
+with `'sys/random.h' file not found`; modified exits 0; rollback on a separate
+copy restores the original SHA-256 and the same compiler failure (exit 1).
+
+Artifacts for this run (retention: 14 days):
+
+- `bun-centos7-glibc217-38504121086`: Bun binary, external fixtures, ELF audit,
+  source patches, hashes, toolchain details, and compiler/rollback evidence.
+- `bun-centos7-runtime-38504121086`: clean-container runtime log and image digest.
+
+This validates a GNU Bun build using CentOS 7's system libc and real external
+library loading. The original 3.10 kernel and individual production addons
+remain separate compatibility checks; the prebuilt WebKit boundary above
+also applies to this result.
