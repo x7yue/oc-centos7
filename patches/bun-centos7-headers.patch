@@ -1,0 +1,29 @@
+--- a/src/jsc/bindings/workaround-missing-symbols.cpp
++++ b/src/jsc/bindings/workaround-missing-symbols.cpp
+@@ -79,8 +79,26 @@
+ #include <stdio.h>
+ #include <signal.h>
+ #include <stdlib.h>
++#if __has_include(<sys/random.h>)
+ #include <sys/random.h>
++#endif
+ #include <sys/syscall.h>
++
++// CentOS 7 headers predate these syscalls. Keep the upstream runtime wrappers.
++#if defined(__x86_64__)
++#ifndef SYS_getrandom
++#define SYS_getrandom 318
++#endif
++#ifndef SYS_memfd_create
++#define SYS_memfd_create 319
++#endif
++#ifndef SYS_copy_file_range
++#define SYS_copy_file_range 326
++#endif
++#ifndef SYS_statx
++#define SYS_statx 332
++#endif
++#endif
+ #include <unistd.h>
+ #include <dlfcn.h>
+ 

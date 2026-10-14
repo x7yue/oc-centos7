@@ -1,0 +1,25 @@
+# Native CentOS 7 userland; glibc and its headers remain the distribution's 2.17.
+FROM ghcr.io/mayeut/static-clang:21.1.8.1@sha256:c251c7b7a0ec861788c9db747082ba867d03cdbe85965a7ee434eeef2aef8915 AS llvm
+FROM quay.io/pypa/manylinux2014_x86_64@sha256:f6a6f153c9cf45470507ebbc27013e5db14ce21331b62fd2c540561f25e5f0a5
+COPY --from=llvm /opt/clang /opt/llvm21
+ENV PATH=/opt/llvm21/bin:/usr/local/cargo/bin:/usr/local/go/bin:/opt/python/cp311-cp311/bin:/usr/local/bin:/opt/rh/devtoolset-10/root/usr/bin:/usr/bin:/bin \
+    RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo \
+    BUN_TOOLCHAIN_LLVM=/opt/llvm21
+RUN test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.17' \
+    && grep -q 'CentOS Linux release 7' /etc/centos-release \
+    && yum install -y ruby nasm && yum clean all
+# Import only GCC 13 headers/static runtime, never a replacement libc/sysroot.
+COPY scripts/bun-centos7/install-cxx.py /tmp/install-cxx.py
+RUN python -m pip install --no-cache-dir zstandard==0.25.0 \
+    && python /tmp/install-cxx.py \
+    && rm /tmp/install-cxx.py
+RUN curl -fsSL --retry 5 https://go.dev/dl/go1.24.6.linux-amd64.tar.gz | tar -xz -C /usr/local \
+    && curl -fsSL --retry 5 https://sh.rustup.rs -o /tmp/rustup.sh \
+    && sh /tmp/rustup.sh -y --default-toolchain nightly-2026-07-20 --profile minimal \
+    && rm /tmp/rustup.sh
+RUN curl -fsSL --retry 5 https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64-baseline.zip -o /tmp/bun.zip \
+    && unzip -q /tmp/bun.zip -d /opt/bootstrap \
+    && ln -s /opt/bootstrap/bun-linux-x64-baseline/bun /usr/local/bin/bun \
+    && rm /tmp/bun.zip \
+    && bun --version && clang++ --version && rustc --version && cmake --version && ninja --version && nasm -v
+WORKDIR /src/bun
