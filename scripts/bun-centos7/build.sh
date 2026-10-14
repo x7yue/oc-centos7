@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd /src/bun
+git config --global --add safe.directory /src/bun
 mkdir -p /out/evidence /out/fixtures /cache/cargo
 export CARGO_TARGET_DIR=/cache/cargo
 export CARGO_BUILD_JOBS=2
