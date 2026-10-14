@@ -11,6 +11,9 @@ export BUN_TOOLCHAIN_LLVM=/opt/llvm21
 test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.17'
 grep 'CentOS Linux release 7' /etc/centos-release
 test "$(git rev-parse HEAD)" = 744846f844374847c902b5e7fd59b4342a51ef99
+# Fresh checkouts of this exact pin must not invalidate every cached object.
+source_epoch=$(git log -1 --format=%ct)
+git ls-files -z | xargs -0 touch -d "@$source_epoch"
 {
   cat /etc/centos-release
   getconf GNU_LIBC_VERSION
@@ -89,7 +92,7 @@ git diff > /out/evidence/all-source-changes.patch
 # Upstream release profile uses its pinned WebKit archive and disables LTO.
 # Do not apply the musl/static OpenTUI or dlopen shim patches.
 bun scripts/build.ts --profile=release --os=linux --arch=x64 --abi=gnu \
-  --baseline=on --build-dir=/cache/build --cache-dir=/cache/deps -j2
+  --baseline=on --build-dir=/src/bun/build --cache-dir=/cache/deps -j2
 install -m 755 /cache/build/bun /out/bun
 
 # Build external libraries only AFTER Bun is linked.

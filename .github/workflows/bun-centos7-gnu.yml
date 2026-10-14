@@ -38,7 +38,7 @@ jobs:
           python3 -m py_compile repo/scripts/bun-centos7/*.py
           test "$(jq -r .bun.ref repo/versions.json)" = bun-v1.4.2
           sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet
-          mkdir -p cache artifacts/evidence
+          mkdir -p cache/build artifacts/evidence
           git -C repo rev-parse HEAD > artifacts/evidence/repository-commit.txt
           git -C bun rev-parse HEAD > artifacts/evidence/bun-commit.txt
           df -h .
@@ -56,7 +56,9 @@ jobs:
         id: cache
         uses: actions/cache/restore@v4
         with:
-          path: cache
+          path: |
+            cache
+            bun/vendor
           key: bun-gnu217-v1-744846f8-${{ hashFiles('repo/docker/Dockerfile.buncentos7', 'repo/scripts/bun-centos7/install-cxx.py') }}-${{ github.run_id }}
           restore-keys: |
             bun-gnu217-v1-744846f8-${{ hashFiles('repo/docker/Dockerfile.buncentos7', 'repo/scripts/bun-centos7/install-cxx.py') }}-
@@ -65,17 +67,20 @@ jobs:
           set -o pipefail
           docker run --rm \
             -v "$PWD/repo:/repo:ro" -v "$PWD/bun:/src/bun" \
+            -v "$PWD/cache/build:/src/bun/build" \
             -v "$PWD/cache:/cache" -v "$PWD/artifacts:/out" \
             bun-centos7-gnu:verify bash /repo/scripts/bun-centos7/build.sh \
             2>&1 | tee artifacts/evidence/build.log
       - name: Restore runner ownership
         if: always()
-        run: sudo chown -R "$(id -u):$(id -g)" cache artifacts
+        run: sudo chown -R "$(id -u):$(id -g)" cache artifacts bun/vendor
       - name: Save incremental progress
         if: always() && steps.cache.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: cache
+          path: |
+            cache
+            bun/vendor
           key: ${{ steps.cache.outputs.cache-primary-key }}
       - name: Upload build evidence
         if: always()
